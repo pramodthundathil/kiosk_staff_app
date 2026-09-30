@@ -1,0 +1,23 @@
+# node_modules
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native directories (if unejected/prebuild not committed, or adjust if managed)
+# android/
+# ios/
+
+# Environment variables
+.env
+.env*.local
+
+# macOS
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
