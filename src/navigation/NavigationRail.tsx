@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Layers, Search, Send, User, LogOut } from 'lucide-react-native';
 import { colors, radii, shadows } from '../theme';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +13,7 @@ interface NavigationRailProps {
 
 export const NavigationRail: React.FC<NavigationRailProps> = ({ currentTab, onSelectTab }) => {
   const { logout } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const items = [
     { name: 'HomeTab', label: 'Home', icon: Home },
@@ -22,7 +24,16 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({ currentTab, onSe
   ];
 
   return (
-    <View style={styles.rail}>
+    <View
+      style={[
+        styles.rail,
+        {
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 16),
+          paddingLeft: Math.max(insets.left, 0),
+        },
+      ]}
+    >
       {/* Brand Header */}
       <View style={styles.brandBox}>
         <Image

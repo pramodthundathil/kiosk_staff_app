@@ -31,7 +31,20 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 }) => {
   // Combine provided single asset or custom URL into asset list if assets array is empty
   const mediaList: MediaAsset[] = React.useMemo(() => {
-    if (assets && assets.length > 0) return assets;
+    if (assets && assets.length > 0) {
+      if (customUrl && !assets.some((a) => (a.file_url || a.file) === customUrl)) {
+        return [
+          {
+            id: 'custom_1',
+            title: title || 'Media Asset',
+            asset_type: customType || 'IMAGE',
+            file_url: customUrl,
+          },
+          ...assets,
+        ];
+      }
+      return assets;
+    }
     if (asset) return [asset];
     if (customUrl) {
       return [
@@ -49,12 +62,34 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [activeIndex, setActiveIndex] = useState(initialIndex);
 
   useEffect(() => {
+    if (!visible) return;
+
+    if (asset) {
+      const idx = mediaList.findIndex(
+        (m) =>
+          (m.id && m.id === asset.id) ||
+          ((m.file_url || m.file) && (m.file_url || m.file) === (asset.file_url || asset.file))
+      );
+      if (idx !== -1) {
+        setActiveIndex(idx);
+        return;
+      }
+    }
+
+    if (customUrl) {
+      const idx = mediaList.findIndex((m) => (m.file_url || m.file) === customUrl);
+      if (idx !== -1) {
+        setActiveIndex(idx);
+        return;
+      }
+    }
+
     if (initialIndex >= 0 && initialIndex < mediaList.length) {
       setActiveIndex(initialIndex);
     } else {
       setActiveIndex(0);
     }
-  }, [initialIndex, mediaList]);
+  }, [visible, asset, customUrl, initialIndex, mediaList]);
 
   if (!visible || mediaList.length === 0) return null;
 

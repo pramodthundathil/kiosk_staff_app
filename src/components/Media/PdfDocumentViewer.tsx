@@ -173,7 +173,7 @@ export const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
           <Text style={styles.fallbackTitle}>{title}</Text>
           <Text style={styles.fallbackText}>Technical PDF Document Ready for Review.</Text>
           <Button
-            title="Open Official PDF Brochure"
+            title="Open Data Sheet"
             onPress={handleOpenExternal}
             variant="primary"
             icon={<ExternalLink size={16} color="#FFFFFF" />}
@@ -185,9 +185,9 @@ export const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
         <View style={styles.fallbackBox}>
           <FileText size={44} color={colors.accentBlue} />
           <Text style={styles.fallbackTitle}>Online Viewer Note</Text>
-          <Text style={styles.fallbackText}>The PDF can be opened directly on your device viewer.</Text>
+          <Text style={styles.fallbackText}>The document can be opened directly on your device viewer.</Text>
           <Button
-            title="Open PDF Document"
+            title="Open Data Sheet"
             onPress={handleOpenExternal}
             variant="primary"
             icon={<ExternalLink size={16} color="#FFFFFF" />}
@@ -224,7 +224,7 @@ export const PdfDocumentViewer: React.FC<PdfDocumentViewerProps> = ({
           )}
 
           <Button
-            title="Open PDF File"
+            title="Open Data Sheet"
             onPress={handleOpenExternal}
             variant="secondary"
             size="sm"

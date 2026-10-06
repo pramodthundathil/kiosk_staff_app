@@ -65,6 +65,7 @@ export const ProductDetailScreen: React.FC = () => {
   const [activeMediaAsset, setActiveMediaAsset] = useState<MediaAsset | null>(null);
   const [customMediaUrl, setCustomMediaUrl] = useState<string | null>(null);
   const [customMediaType, setCustomMediaType] = useState<any>(null);
+  const [modalInitialIndex, setModalInitialIndex] = useState<number>(0);
 
   const loadDetail = async () => {
     if (!productId) return;
@@ -122,6 +123,14 @@ export const ProductDetailScreen: React.FC = () => {
   const mainImage = currentItem.image_url || product.image_url || '';
   const allMedia = [...(product.media_assets || []), ...(selectedVariant?.media_assets || [])];
 
+  // Visual gallery media only (excludes document PDFs so datasheets don't hijack photo/3D gallery)
+  const visualMedia = allMedia.filter(
+    (a) =>
+      a.asset_type !== 'PDF_BROCHURE' &&
+      a.asset_type !== 'TECH_SHEET' &&
+      !(a.file_url && a.file_url.toLowerCase().endsWith('.pdf'))
+  );
+
   const threeDAsset = allMedia.find((a) => a.asset_type === 'THREE_D');
   const videoAsset = allMedia.find((a) => a.asset_type === 'VIDEO');
   const pdfAsset = allMedia.find(
@@ -158,7 +167,7 @@ export const ProductDetailScreen: React.FC = () => {
   if (hasApplications) availableTabs.push({ key: 'applications', label: 'Applications', icon: Building2 });
   if (hasTesting) availableTabs.push({ key: 'testing', label: 'Testing', icon: FlaskConical });
   if (hasCertificates) availableTabs.push({ key: 'certificates', label: 'Certificates', icon: Award });
-  if (hasPdf) availableTabs.push({ key: 'pdf', label: 'PDF Brochure', icon: FileText });
+  if (hasPdf) availableTabs.push({ key: 'pdf', label: 'Data sheet', icon: FileText });
   if (has3D) availableTabs.push({ key: '3d', label: '3D View', icon: Box });
   if (hasVideo) availableTabs.push({ key: 'video', label: 'Video', icon: Video });
 
@@ -166,13 +175,41 @@ export const ProductDetailScreen: React.FC = () => {
     setCustomMediaUrl(url);
     setCustomMediaType('PDF_BROCHURE');
     setActiveMediaAsset({ id: 'pdf', title, asset_type: 'PDF_BROCHURE', file_url: url });
+    setModalInitialIndex(0);
     setMediaModalVisible(true);
   };
 
-  const openFullscreenImage = (url: string) => {
-    setCustomMediaUrl(url);
-    setCustomMediaType('IMAGE');
-    setActiveMediaAsset({ id: 'img', title: product.name, asset_type: 'IMAGE', file_url: url });
+  const openFullscreenMedia = (item: any, explicitType?: 'IMAGE' | 'THREE_D' | 'VIDEO') => {
+    let targetUrl = '';
+    let targetType: 'IMAGE' | 'THREE_D' | 'VIDEO' = explicitType || 'IMAGE';
+    let targetAsset: MediaAsset | null = null;
+
+    if (typeof item === 'string') {
+      targetUrl = item;
+      const found = visualMedia.find((m) => (m.file_url || m.file) === item);
+      if (found) {
+        targetAsset = found;
+        targetType = (found.asset_type as any) || targetType;
+      }
+    } else if (item) {
+      targetAsset = item.asset || item;
+      targetUrl = targetAsset?.file_url || targetAsset?.file || item.url || '';
+      targetType = (targetAsset?.asset_type as any) || item.type || explicitType || 'IMAGE';
+    }
+
+    let idx = visualMedia.findIndex(
+      (m) =>
+        (targetUrl && (m.file_url || m.file) === targetUrl) ||
+        (targetAsset && targetAsset.id && m.id === targetAsset.id)
+    );
+    if (idx === -1) idx = 0;
+
+    setModalInitialIndex(idx);
+    setCustomMediaUrl(targetUrl);
+    setCustomMediaType(targetType);
+    setActiveMediaAsset(
+      targetAsset || { id: 'active_visual', title: product.name, asset_type: targetType, file_url: targetUrl }
+    );
     setMediaModalVisible(true);
   };
 
@@ -202,7 +239,8 @@ export const ProductDetailScreen: React.FC = () => {
               <ProductGallery
                 mainImageUrl={mainImage}
                 mediaAssets={allMedia}
-                onOpenFullscreen={openFullscreenImage}
+                productName={product.name}
+                onOpenFullscreen={openFullscreenMedia}
                 height={320}
               />
 
@@ -243,7 +281,7 @@ export const ProductDetailScreen: React.FC = () => {
               {/* Key Highlights */}
               <View style={styles.highlightBadgeRow}>
                 {has3D && <Badge label="Interactive 3D" variant="amber" icon={<Box size={12} color="#D97706" />} />}
-                {hasPdf && <Badge label="PDF Brochure Available" variant="accent" icon={<FileText size={12} color="#0D60AE" />} />}
+                {hasPdf && <Badge label="Data Sheet Available" variant="accent" icon={<FileText size={12} color="#0D60AE" />} />}
                 {hasVideo && <Badge label="Video Demo" variant="navy" icon={<Video size={12} color="#FFFFFF" />} />}
                 {hasTesting && <Badge label="Quality Tested" variant="success" />}
               </View>
@@ -262,7 +300,8 @@ export const ProductDetailScreen: React.FC = () => {
             <ProductGallery
               mainImageUrl={mainImage}
               mediaAssets={allMedia}
-              onOpenFullscreen={openFullscreenImage}
+              productName={product.name}
+              onOpenFullscreen={openFullscreenMedia}
               height={layout.isTablet ? 340 : 260}
             />
 
@@ -393,7 +432,12 @@ export const ProductDetailScreen: React.FC = () => {
       <MediaViewerModal
         visible={mediaModalVisible}
         asset={activeMediaAsset}
-        assets={allMedia.length > 0 ? allMedia : activeMediaAsset ? [activeMediaAsset] : []}
+        assets={
+          customMediaType === 'PDF_BROCHURE' || customMediaType === 'TECH_SHEET'
+            ? activeMediaAsset ? [activeMediaAsset] : []
+            : visualMedia
+        }
+        initialIndex={modalInitialIndex}
         customUrl={customMediaUrl}
         customType={customMediaType}
         onClose={() => setMediaModalVisible(false)}

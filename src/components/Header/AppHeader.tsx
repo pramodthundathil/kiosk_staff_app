@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Search, User } from 'lucide-react-native';
 import { colors, radii, shadows } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
@@ -25,9 +26,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onProfilePress,
 }) => {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top, height: 60 + insets.top }]}>
       <View style={styles.leftSection}>
         {showBack && onBack ? (
           <AnimatedPressable style={styles.backBtn} onPress={onBack}>

@@ -11,6 +11,7 @@ import { ProductDetailScreen } from '../screens/Product/ProductDetailScreen';
 import { SearchScreen } from '../screens/Search/SearchScreen';
 import { SharedHistoryScreen } from '../screens/Shared/SharedHistoryScreen';
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadows } from '../theme';
 import { Home, Layers, Search, Send, User } from 'lucide-react-native';
 
@@ -78,6 +79,12 @@ function ProfileStackScreen() {
 }
 
 export const BottomTabNavigator: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  
+  // Safe bottom padding for Android system navigation (3-button or gesture bar) and iOS home indicator
+  const safeBottom = Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 8);
+  const tabHeight = 56 + safeBottom;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -85,11 +92,11 @@ export const BottomTabNavigator: React.FC = () => {
         tabBarActiveTintColor: colors.accentBlue,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          height: Platform.OS === 'ios' ? 76 : 64,
+          height: tabHeight,
           backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          paddingBottom: Platform.OS === 'ios' ? 16 : 8,
+          paddingBottom: safeBottom,
           paddingTop: 8,
           ...shadows.card,
         },

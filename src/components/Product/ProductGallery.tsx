@@ -1,40 +1,106 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Image, StyleSheet, ScrollView, TouchableOpacity, Text } from 'react-native';
 import { MediaAsset } from '../../types/product';
 import { colors, radii, shadows } from '../../theme';
-import { Maximize2, Image as ImageIcon } from 'lucide-react-native';
+import { Maximize2, Image as ImageIcon, Box, Video } from 'lucide-react-native';
 import { AnimatedPressable } from '../Common/AnimatedPressable';
+import { ThreeDViewer } from '../Media/ThreeDViewer';
+import { VideoPlayerView } from '../Media/VideoPlayerView';
+
+export interface GalleryItem {
+  id: string;
+  type: 'IMAGE' | 'THREE_D' | 'VIDEO';
+  url: string;
+  title: string;
+  asset?: MediaAsset;
+}
 
 interface ProductGalleryProps {
   mainImageUrl?: string;
   mediaAssets?: MediaAsset[];
-  onOpenFullscreen?: (url: string) => void;
+  productName?: string;
+  onOpenFullscreen?: (item: GalleryItem | string, type?: 'IMAGE' | 'THREE_D' | 'VIDEO') => void;
   height?: number;
 }
 
 export const ProductGallery: React.FC<ProductGalleryProps> = ({
   mainImageUrl,
   mediaAssets = [],
+  productName,
   onOpenFullscreen,
   height = 280,
 }) => {
-  const imagesOnly = mediaAssets.filter((a) => a.asset_type === 'IMAGE' && (a.file_url || a.file));
-  const imageList = imagesOnly.map((a) => a.file_url || a.file || '').filter(Boolean);
-  
-  if (mainImageUrl && !imageList.includes(mainImageUrl)) {
-    imageList.unshift(mainImageUrl);
-  }
+  // Collect all visual items (photos, 3D models, videos)
+  const items: GalleryItem[] = useMemo(() => {
+    const list: GalleryItem[] = [];
+
+    // Main image
+    if (mainImageUrl) {
+      list.push({
+        id: 'main_image',
+        type: 'IMAGE',
+        url: mainImageUrl,
+        title: productName ? `${productName} (Main Photo)` : 'Main Photo',
+      });
+    }
+
+    // Media assets
+    mediaAssets.forEach((a, idx) => {
+      const fileUrl = a.file_url || a.file || '';
+      if (!fileUrl) return;
+
+      if (a.asset_type === 'THREE_D') {
+        list.push({
+          id: a.id || `3d_${idx}`,
+          type: 'THREE_D',
+          url: fileUrl,
+          title: a.title || `${productName || 'Product'} (Interactive 3D)`,
+          asset: a,
+        });
+      } else if (a.asset_type === 'VIDEO') {
+        list.push({
+          id: a.id || `video_${idx}`,
+          type: 'VIDEO',
+          url: fileUrl,
+          title: a.title || `${productName || 'Product'} (Video Demo)`,
+          asset: a,
+        });
+      } else if (a.asset_type === 'IMAGE') {
+        if (fileUrl !== mainImageUrl) {
+          list.push({
+            id: a.id || `img_${idx}`,
+            type: 'IMAGE',
+            url: fileUrl,
+            title: a.title || `${productName || 'Product'} (Photo ${idx + 1})`,
+            asset: a,
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [mainImageUrl, mediaAssets, productName]);
 
   const [activeIndex, setActiveIndex] = useState(0);
-  const currentImage = imageList[activeIndex] || mainImageUrl || '';
+  const currentItem = items[activeIndex] || items[0] || null;
 
   return (
     <View style={styles.container}>
-      {/* Main Image Display */}
+      {/* Main Media Display Card */}
       <View style={[styles.mainImageWrapper, { height }]}>
-        {currentImage ? (
+        {currentItem?.type === 'THREE_D' ? (
+          <ThreeDViewer
+            modelUrl={currentItem.url}
+            title={currentItem.title}
+            isFullscreen={false}
+            onToggleFullscreen={() => onOpenFullscreen?.(currentItem, 'THREE_D')}
+            style={{ width: '100%', height: '100%' }}
+          />
+        ) : currentItem?.type === 'VIDEO' ? (
+          <VideoPlayerView url={currentItem.url} autoPlay={false} />
+        ) : currentItem?.type === 'IMAGE' && currentItem.url ? (
           <Image
-            source={{ uri: currentImage }}
+            source={{ uri: currentItem.url }}
             style={styles.mainImage}
             resizeMode="contain"
           />
@@ -45,20 +111,24 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           </View>
         )}
 
-        {/* Image Pagination Badge */}
-        {imageList.length > 1 && (
+        {/* Media Type & Pagination Badge */}
+        {items.length > 1 && (
           <View style={styles.paginationBadge}>
             <Text style={styles.paginationText}>
-              {activeIndex + 1} / {imageList.length}
+              {currentItem?.type === 'THREE_D'
+                ? `3D Model (${activeIndex + 1}/${items.length})`
+                : currentItem?.type === 'VIDEO'
+                ? `Video (${activeIndex + 1}/${items.length})`
+                : `${activeIndex + 1} / ${items.length}`}
             </Text>
           </View>
         )}
 
-        {/* Fullscreen Button */}
-        {currentImage && onOpenFullscreen && (
+        {/* Fullscreen Expand Button on top right corner for Images/Videos */}
+        {currentItem && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
           <AnimatedPressable
             style={styles.fullscreenBtn}
-            onPress={() => onOpenFullscreen(currentImage)}
+            onPress={() => onOpenFullscreen(currentItem, currentItem.type)}
           >
             <Maximize2 size={16} color="#FFFFFF" />
           </AnimatedPressable>
@@ -66,22 +136,34 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
       </View>
 
       {/* Thumbnails Row */}
-      {imageList.length > 1 && (
+      {items.length > 1 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.thumbnailContainer}
         >
-          {imageList.map((url, index) => {
+          {items.map((item, index) => {
             const isActive = index === activeIndex;
             return (
               <TouchableOpacity
-                key={index}
+                key={item.id || index}
                 activeOpacity={0.8}
                 onPress={() => setActiveIndex(index)}
                 style={[styles.thumbnailWrapper, isActive && styles.activeThumbnail]}
               >
-                <Image source={{ uri: url }} style={styles.thumbnailImage} resizeMode="contain" />
+                {item.type === 'IMAGE' ? (
+                  <Image source={{ uri: item.url }} style={styles.thumbnailImage} resizeMode="contain" />
+                ) : item.type === 'THREE_D' ? (
+                  <View style={styles.iconThumbBox}>
+                    <Box size={22} color={isActive ? colors.amberGold : colors.primaryNavy} />
+                    <Text style={[styles.iconThumbText, isActive && styles.activeIconThumbText]}>3D</Text>
+                  </View>
+                ) : (
+                  <View style={styles.iconThumbBox}>
+                    <Video size={20} color={isActive ? colors.accentBlue : colors.primaryNavy} />
+                    <Text style={[styles.iconThumbText, isActive && styles.activeIconThumbText]}>Video</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -128,6 +210,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radii.full,
+    zIndex: 10,
   },
   paginationText: {
     color: '#FFFFFF',
@@ -144,6 +227,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryNavy,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
     ...shadows.subtle,
   },
   thumbnailContainer: {
@@ -166,5 +250,22 @@ const styles = StyleSheet.create({
   thumbnailImage: {
     width: '100%',
     height: '100%',
+  },
+  iconThumbBox: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    borderRadius: radii.sm,
+  },
+  iconThumbText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.primaryNavy,
+  },
+  activeIconThumbText: {
+    color: colors.amberGold,
   },
 });
