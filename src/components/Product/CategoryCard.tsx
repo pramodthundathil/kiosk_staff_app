@@ -22,9 +22,9 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   return (
     <AnimatedPressable style={[styles.card, { width }]} onPress={onPress}>
       <View style={styles.imageContainer}>
-        {category.image_url ? (
+        {category.image_url && category.image_url.trim().length > 0 ? (
           <Image
-            source={{ uri: category.image_url }}
+            source={{ uri: category.image_url.trim() }}
             style={styles.image}
             resizeMode="cover"
           />

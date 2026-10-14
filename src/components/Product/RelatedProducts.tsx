@@ -28,8 +28,8 @@ export const RelatedProducts: React.FC<RelatedProductsProps> = ({ products, onSe
             onPress={() => onSelectProduct(item)}
           >
             <View style={styles.imageBox}>
-              {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="contain" />
+              {item.image_url && item.image_url.trim().length > 0 ? (
+                <Image source={{ uri: item.image_url.trim() }} style={styles.image} resizeMode="contain" />
               ) : (
                 <Box size={24} color={colors.textMuted} />
               )}

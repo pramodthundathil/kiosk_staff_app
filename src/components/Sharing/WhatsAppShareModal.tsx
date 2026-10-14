@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Share as NativeShare,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Product, ProductVariant } from '../../types/product';
 import { WhatsAppShareOptions } from '../../types/share';
@@ -23,6 +24,7 @@ import {
   ShieldCheck,
   User,
   ArrowRight,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 
 import { Button } from '../Common/Button';
@@ -64,7 +66,6 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   const [showCountrySelector, setShowCountrySelector] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
-
   const [options, setOptions] = useState<WhatsAppShareOptions>({
     includeOverview: true,
     includeFeatures: true,
@@ -76,15 +77,10 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     includeProductLink: true,
   });
 
-  const [messagePreview, setMessagePreview] = useState('');
-
-  // Update preview whenever product, variant, options change
-  useEffect(() => {
-    if (product) {
-      const msg = generateWhatsAppMessage(product, selectedVariant, options, user?.username);
-      setMessagePreview(msg);
-    }
-  }, [product, selectedVariant, options, user]);
+  const messagePreview = useMemo(() => {
+    if (!product) return '';
+    return generateWhatsAppMessage(product, selectedVariant, options, user?.username);
+  }, [product, selectedVariant, options, user?.username]);
 
   if (!visible || !product) return null;
 
@@ -238,23 +234,26 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               )}
             </View>
 
-            {/* Direct WhatsApp Share to Existing Contact */}
-            <TouchableOpacity
-              style={styles.directShareCard}
-              onPress={handleDirectWhatsApp}
-              activeOpacity={0.8}
-            >
-              <View style={styles.directShareIconBg}>
-                <WhatsAppIcon size={24} color="#FFFFFF" />
-              </View>
-              <View style={styles.directShareTextBox}>
-                <Text style={styles.directShareTitle}>Direct WhatsApp Share</Text>
-                <Text style={styles.directShareSubtitle}>
-                  Share to your WhatsApp contacts directly (no number required)
-                </Text>
-              </View>
-              <ArrowRight size={18} color={colors.whatsAppDarkGreen} />
-            </TouchableOpacity>
+            {/* Quick Share Buttons */}
+            <View style={{ gap: 10, marginBottom: 16 }}>
+              {/* Direct WhatsApp Share: Complete Details */}
+              <TouchableOpacity
+                style={styles.directShareCard}
+                onPress={handleDirectWhatsApp}
+                activeOpacity={0.8}
+              >
+                <View style={styles.directShareIconBg}>
+                  <WhatsAppIcon size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.directShareTextBox}>
+                  <Text style={styles.directShareTitle}>Direct WhatsApp Share</Text>
+                  <Text style={styles.directShareSubtitle}>
+                    Share product details directly to WhatsApp contacts
+                  </Text>
+                </View>
+                <ArrowRight size={18} color={colors.whatsAppDarkGreen} />
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.orDividerRow}>
               <View style={styles.orLine} />
@@ -356,6 +355,11 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 label="Certificates Notice"
                 checked={options.includeCertificates}
                 onToggle={() => toggleOption('includeCertificates')}
+              />
+              <OptionCheckbox
+                label="Product Images"
+                checked={options.includeImages}
+                onToggle={() => toggleOption('includeImages')}
               />
               <OptionCheckbox
                 label="Product Web Link"
@@ -596,8 +600,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 16,
     ...shadows.subtle,
+  },
+  directImageShareCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    ...shadows.subtle,
+  },
+  directImageShareIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.whatsAppGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   directShareIconBg: {
     width: 44,

@@ -30,8 +30,8 @@ export const SubCategoryCard: React.FC<SubCategoryCardProps> = ({
       onPress={onPress}
     >
       <View style={styles.imageBox}>
-        {subCategory.image_url ? (
-          <Image source={{ uri: subCategory.image_url }} style={styles.image} resizeMode="contain" />
+        {subCategory.image_url && subCategory.image_url.trim().length > 0 ? (
+          <Image source={{ uri: subCategory.image_url.trim() }} style={styles.image} resizeMode="contain" />
         ) : (
           <Layers size={24} color={isSelected ? '#FFFFFF' : colors.accentBlue} />
         )}

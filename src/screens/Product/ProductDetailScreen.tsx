@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,9 @@ import {
   openWhatsAppDirect,
   generateWhatsAppMessage,
   DEFAULT_WHATSAPP_SHARE_OPTIONS,
+  shareMediaAssetToWhatsApp,
+  shareImageFileDirectly,
+  shareAllProductImagesToWhatsApp,
 } from '../../utils/whatsapp';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -50,6 +53,7 @@ import {
   Building2,
   FlaskConical,
   Award,
+  Share2,
 } from 'lucide-react-native';
 
 export const ProductDetailScreen: React.FC = () => {
@@ -157,6 +161,45 @@ export const ProductDetailScreen: React.FC = () => {
     loadDetail();
   }, [productId]);
 
+  // Active displaying item for hook calculations
+  const initialDisplayItem = selectedVariant || product;
+  const mainImage = (initialDisplayItem?.image_url || product?.image_url || '').trim();
+  const allMedia = [...(product?.media_assets || []), ...(selectedVariant?.media_assets || [])];
+
+  // Visual gallery media only (excludes document PDFs so datasheets don't hijack photo/3D gallery)
+  // Ensure mainImage is included as the primary visual asset if available
+  const visualMedia = useMemo(() => {
+    const list: MediaAsset[] = [];
+    if (mainImage) {
+      list.push({
+        id: 'main_product_image',
+        title: product?.name || 'Main Photo',
+        asset_type: 'IMAGE',
+        file_url: mainImage,
+      });
+    }
+
+    allMedia.forEach((a) => {
+      const u = (a.file_url || a.file || '').trim();
+      if (!u) return;
+      if (
+        a.asset_type === 'PDF_BROCHURE' ||
+        a.asset_type === 'TECH_SHEET' ||
+        u.toLowerCase().endsWith('.pdf')
+      ) {
+        return;
+      }
+      if (u !== mainImage) {
+        list.push({
+          ...a,
+          file_url: u,
+        });
+      }
+    });
+
+    return list;
+  }, [mainImage, allMedia, product?.name]);
+
   if (!product && isLoading) {
     return (
       <View style={styles.container}>
@@ -182,18 +225,8 @@ export const ProductDetailScreen: React.FC = () => {
     );
   }
 
-  // Active displaying item (selected variant or main product)
+  // Active displaying item (selected variant or main product - non-null guaranteed)
   const currentItem = selectedVariant || product;
-  const mainImage = currentItem.image_url || product.image_url || '';
-  const allMedia = [...(product.media_assets || []), ...(selectedVariant?.media_assets || [])];
-
-  // Visual gallery media only (excludes document PDFs so datasheets don't hijack photo/3D gallery)
-  const visualMedia = allMedia.filter(
-    (a) =>
-      a.asset_type !== 'PDF_BROCHURE' &&
-      a.asset_type !== 'TECH_SHEET' &&
-      !(a.file_url && a.file_url.toLowerCase().endsWith('.pdf'))
-  );
 
   const threeDAsset = allMedia.find((a) => a.asset_type === 'THREE_D');
   const videoAsset = allMedia.find((a) => a.asset_type === 'VIDEO');
@@ -243,37 +276,64 @@ export const ProductDetailScreen: React.FC = () => {
     setMediaModalVisible(true);
   };
 
+  const handleShareGalleryItemWhatsApp = async (item: any) => {
+    const cleanUrl = (item?.url || '').trim();
+    if (!cleanUrl) return;
+    try {
+      const isPhoto = item?.type === 'IMAGE' || !item?.type || (!cleanUrl.toLowerCase().endsWith('.pdf') && item?.type !== 'VIDEO' && item?.type !== 'THREE_D');
+      if (isPhoto) {
+        // Share actual image file directly!
+        const shared = await shareImageFileDirectly(cleanUrl, item.title || product?.name || 'Share Image');
+        if (!shared) {
+          Alert.alert('Notice', 'Unable to prepare photo for sharing.');
+        }
+      } else {
+        await shareMediaAssetToWhatsApp(
+          cleanUrl,
+          item.title || product?.name,
+          product?.name,
+          item.type || 'IMAGE'
+        );
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to share media.');
+    }
+  };
+
+  const handleShareAllImagesWhatsApp = async () => {
+    if (!product) return;
+    await shareAllProductImagesToWhatsApp(product, selectedVariant, user?.username);
+  };
+
   const openFullscreenMedia = (item: any, explicitType?: 'IMAGE' | 'THREE_D' | 'VIDEO') => {
     let targetUrl = '';
     let targetType: 'IMAGE' | 'THREE_D' | 'VIDEO' = explicitType || 'IMAGE';
-    let targetAsset: MediaAsset | null = null;
 
     if (typeof item === 'string') {
-      targetUrl = item;
-      const found = visualMedia.find((m) => (m.file_url || m.file) === item);
-      if (found) {
-        targetAsset = found;
-        targetType = (found.asset_type as any) || targetType;
-      }
+      targetUrl = item.trim();
     } else if (item) {
-      targetAsset = item.asset || item;
-      targetUrl = targetAsset?.file_url || targetAsset?.file || item.url || '';
-      targetType = (targetAsset?.asset_type as any) || item.type || explicitType || 'IMAGE';
+      targetUrl = (item.file_url || item.file || item.url || item.asset?.file_url || item.asset?.file || '').trim();
+      targetType = item.asset_type || item.asset?.asset_type || item.type || explicitType || 'IMAGE';
     }
 
+    if (!targetUrl) return;
+
+    let targetAsset: MediaAsset = {
+      id: typeof item === 'object' && item?.id ? String(item.id) : `media_${Date.now()}`,
+      title: product?.name || 'Product Photo',
+      asset_type: targetType,
+      file_url: targetUrl,
+    };
+
     let idx = visualMedia.findIndex(
-      (m) =>
-        (targetUrl && (m.file_url || m.file) === targetUrl) ||
-        (targetAsset && targetAsset.id && m.id === targetAsset.id)
+      (m) => (m.file_url || m.file || '').trim() === targetUrl
     );
     if (idx === -1) idx = 0;
 
     setModalInitialIndex(idx);
     setCustomMediaUrl(targetUrl);
     setCustomMediaType(targetType);
-    setActiveMediaAsset(
-      targetAsset || { id: 'active_visual', title: product.name, asset_type: targetType, file_url: targetUrl }
-    );
+    setActiveMediaAsset(targetAsset);
     setMediaModalVisible(true);
   };
 
@@ -305,32 +365,20 @@ export const ProductDetailScreen: React.FC = () => {
                 mediaAssets={allMedia}
                 productName={product.name}
                 onOpenFullscreen={openFullscreenMedia}
+                onShareWhatsApp={handleShareGalleryItemWhatsApp}
+                onShareAllImagesWhatsApp={handleShareAllImagesWhatsApp}
                 height={320}
               />
 
               {/* Share & Demo Action Bar */}
               <View style={styles.demoActionsBox}>
-                <View style={styles.shareRow}>
-                  <Button
-                    title="Share with Customer via WhatsApp"
-                    onPress={() => setShareModalVisible(true)}
-                    variant="whatsApp"
-                    size="lg"
-                    icon={<Send size={18} color="#FFFFFF" />}
-                    style={{ flex: 1 }}
-                  />
-                  <TouchableOpacity
-                    style={styles.directWhatsAppIconBtn}
-                    onPress={handleDirectWhatsAppShare}
-                    activeOpacity={0.8}
-                    accessibilityLabel="Direct WhatsApp Share to Contact"
-                  >
-                    <WhatsAppIcon size={26} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.shareDirectHint}>
-                  Tap the WhatsApp icon to share directly to contacts
-                </Text>
+                <Button
+                  title="Share with Customer via WhatsApp"
+                  onPress={() => setShareModalVisible(true)}
+                  variant="whatsApp"
+                  size="lg"
+                  icon={<Send size={18} color="#FFFFFF" />}
+                />
               </View>
             </View>
 
@@ -379,6 +427,8 @@ export const ProductDetailScreen: React.FC = () => {
               mediaAssets={allMedia}
               productName={product.name}
               onOpenFullscreen={openFullscreenMedia}
+              onShareWhatsApp={handleShareGalleryItemWhatsApp}
+              onShareAllImagesWhatsApp={handleShareAllImagesWhatsApp}
               height={layout.isTablet ? 340 : 260}
             />
 
@@ -402,27 +452,14 @@ export const ProductDetailScreen: React.FC = () => {
                 />
               )}
 
-              <View style={styles.shareRowPortrait}>
-                <Button
-                  title="Share with Customer via WhatsApp"
-                  onPress={() => setShareModalVisible(true)}
-                  variant="whatsApp"
-                  size="lg"
-                  icon={<Send size={18} color="#FFFFFF" />}
-                  style={{ flex: 1 }}
-                />
-                <TouchableOpacity
-                  style={styles.directWhatsAppIconBtn}
-                  onPress={handleDirectWhatsAppShare}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Direct WhatsApp Share to Contact"
-                >
-                  <WhatsAppIcon size={26} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.shareDirectHint}>
-                Tap the WhatsApp icon to share directly to contacts
-              </Text>
+              <Button
+                title="Share with Customer via WhatsApp"
+                onPress={() => setShareModalVisible(true)}
+                variant="whatsApp"
+                size="lg"
+                icon={<Send size={18} color="#FFFFFF" />}
+                style={styles.shareBtnPortrait}
+              />
             </View>
           </View>
         )}
@@ -530,7 +567,9 @@ export const ProductDetailScreen: React.FC = () => {
         initialIndex={modalInitialIndex}
         customUrl={customMediaUrl}
         customType={customMediaType}
+        productName={product.name}
         onClose={() => setMediaModalVisible(false)}
+        onShareAllWhatsApp={handleShareAllImagesWhatsApp}
       />
     </View>
   );

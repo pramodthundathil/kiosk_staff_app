@@ -6,6 +6,7 @@ import { Maximize2, Image as ImageIcon, Box, Video } from 'lucide-react-native';
 import { AnimatedPressable } from '../Common/AnimatedPressable';
 import { ThreeDViewer } from '../Media/ThreeDViewer';
 import { VideoPlayerView } from '../Media/VideoPlayerView';
+import { WhatsAppIcon } from '../Common/WhatsAppIcon';
 
 export interface GalleryItem {
   id: string;
@@ -20,6 +21,8 @@ interface ProductGalleryProps {
   mediaAssets?: MediaAsset[];
   productName?: string;
   onOpenFullscreen?: (item: GalleryItem | string, type?: 'IMAGE' | 'THREE_D' | 'VIDEO') => void;
+  onShareWhatsApp?: (item: GalleryItem) => void;
+  onShareAllImagesWhatsApp?: () => void;
   height?: number;
 }
 
@@ -28,6 +31,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
   mediaAssets = [],
   productName,
   onOpenFullscreen,
+  onShareWhatsApp,
+  onShareAllImagesWhatsApp,
   height = 280,
 }) => {
   // Collect all visual items (photos, 3D models, videos)
@@ -35,18 +40,19 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
     const list: GalleryItem[] = [];
 
     // Main image
-    if (mainImageUrl) {
+    const cleanMain = (mainImageUrl || '').trim();
+    if (cleanMain) {
       list.push({
         id: 'main_image',
         type: 'IMAGE',
-        url: mainImageUrl,
+        url: cleanMain,
         title: productName ? `${productName} (Main Photo)` : 'Main Photo',
       });
     }
 
     // Media assets
     mediaAssets.forEach((a, idx) => {
-      const fileUrl = a.file_url || a.file || '';
+      const fileUrl = (a.file_url || a.file || '').trim();
       if (!fileUrl) return;
 
       if (a.asset_type === 'THREE_D') {
@@ -66,7 +72,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           asset: a,
         });
       } else if (a.asset_type === 'IMAGE') {
-        if (fileUrl !== mainImageUrl) {
+        if (fileUrl !== cleanMain) {
           list.push({
             id: a.id || `img_${idx}`,
             type: 'IMAGE',
@@ -83,6 +89,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
 
   const [activeIndex, setActiveIndex] = useState(0);
   const currentItem = items[activeIndex] || items[0] || null;
+  const imageCount = items.filter((i) => i.type === 'IMAGE').length;
 
   return (
     <View style={styles.container}>
@@ -98,9 +105,9 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           />
         ) : currentItem?.type === 'VIDEO' ? (
           <VideoPlayerView url={currentItem.url} autoPlay={false} />
-        ) : currentItem?.type === 'IMAGE' && currentItem.url ? (
+        ) : currentItem?.type === 'IMAGE' && currentItem.url && currentItem.url.trim().length > 0 ? (
           <Image
-            source={{ uri: currentItem.url }}
+            source={{ uri: currentItem.url.trim() }}
             style={styles.mainImage}
             resizeMode="contain"
           />
@@ -124,16 +131,34 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           </View>
         )}
 
-        {/* Fullscreen Expand Button on top right corner for Images/Videos */}
-        {currentItem && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
-          <AnimatedPressable
-            style={styles.fullscreenBtn}
-            onPress={() => onOpenFullscreen(currentItem, currentItem.type)}
-          >
-            <Maximize2 size={16} color="#FFFFFF" />
-          </AnimatedPressable>
-        )}
+        {/* Top Right Action Buttons for Gallery */}
+        <View style={styles.topRightActions}>
+          {currentItem && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
+            <AnimatedPressable
+              style={styles.fullscreenBtn}
+              onPress={() => onOpenFullscreen(currentItem, currentItem.type)}
+            >
+              <Maximize2 size={16} color="#FFFFFF" />
+            </AnimatedPressable>
+          )}
+        </View>
       </View>
+
+      {/* Quick Button to Share Photos directly to WhatsApp */}
+      {imageCount > 0 && onShareAllImagesWhatsApp && (
+        <TouchableOpacity
+          style={styles.shareAllImagesBtn}
+          onPress={onShareAllImagesWhatsApp}
+          activeOpacity={0.8}
+        >
+          <WhatsAppIcon size={16} color="#FFFFFF" />
+          <Text style={styles.shareAllImagesBtnText}>
+            {imageCount > 1
+              ? `Share All ${imageCount} Photos to WhatsApp`
+              : 'Share Photo to WhatsApp'}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Thumbnails Row */}
       {items.length > 1 && (
@@ -151,8 +176,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                 onPress={() => setActiveIndex(index)}
                 style={[styles.thumbnailWrapper, isActive && styles.activeThumbnail]}
               >
-                {item.type === 'IMAGE' ? (
-                  <Image source={{ uri: item.url }} style={styles.thumbnailImage} resizeMode="contain" />
+                {item.type === 'IMAGE' && item.url && item.url.trim().length > 0 ? (
+                  <Image source={{ uri: item.url.trim() }} style={styles.thumbnailImage} resizeMode="contain" />
                 ) : item.type === 'THREE_D' ? (
                   <View style={styles.iconThumbBox}>
                     <Box size={22} color={isActive ? colors.amberGold : colors.primaryNavy} />
@@ -217,17 +242,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  fullscreenBtn: {
+  topRightActions: {
     position: 'absolute',
     top: 12,
     right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 10,
+  },
+  galleryWhatsAppBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.whatsAppGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.subtle,
+  },
+  fullscreenBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: colors.primaryNavy,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
     ...shadows.subtle,
   },
   thumbnailContainer: {
@@ -267,5 +306,22 @@ const styles = StyleSheet.create({
   },
   activeIconThumbText: {
     color: colors.amberGold,
+  },
+  shareAllImagesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.whatsAppGreen,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: radii.md,
+    marginTop: 10,
+    ...shadows.subtle,
+  },
+  shareAllImagesBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

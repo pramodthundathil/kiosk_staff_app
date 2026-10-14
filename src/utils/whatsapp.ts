@@ -1,8 +1,10 @@
-import { Linking, Platform } from 'react-native';
+import { Linking, Platform, Alert } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Product, ProductVariant, FeaturePoint } from '../types/product';
 import { WhatsAppShareOptions } from '../types/share';
 import { formatSpecificationValue } from './formatters';
-import { ENV } from '../config/environment';
+import { ENV, getAbsoluteMediaUrl } from '../config/environment';
 
 export function generateWhatsAppMessage(
   product: Product,
@@ -75,6 +77,15 @@ export function generateWhatsAppMessage(
     lines.push(``);
   }
 
+  // Product Images Notice (Photos are shared directly as image files, not raw links)
+  if (options?.includeImages) {
+    const mainImg = (currentItem.image_url || product.image_url || '').trim();
+    if (mainImg) {
+      lines.push(`📸 *Product Photos:* High-resolution product photos attached`);
+      lines.push(``);
+    }
+  }
+
   // Testing & Certificates
   if (options?.includeTesting && (currentItem.in_house_tests?.length || product.in_house_tests?.length)) {
     lines.push(`🔬 *Tested & Certified Quality Standard*`);
@@ -94,6 +105,46 @@ export function generateWhatsAppMessage(
   lines.push(`${staffName || 'Sales Representative'} | ${ENV.COMPANY_NAME}`);
 
   return lines.join('\n');
+}
+
+/**
+ * Share a specific media asset or image directly to WhatsApp contacts
+ */
+export async function shareMediaAssetToWhatsApp(
+  mediaUrl: string,
+  title?: string,
+  productName?: string,
+  assetType: string = 'IMAGE'
+): Promise<boolean> {
+  const cleanUrl = (mediaUrl || '').trim();
+  if (!cleanUrl) return false;
+
+  const typeLabel =
+    assetType === 'THREE_D'
+      ? 'Interactive 3D Model'
+      : assetType === 'VIDEO'
+      ? 'Product Video'
+      : assetType === 'PDF_BROCHURE' || assetType === 'TECH_SHEET'
+      ? 'Technical Document'
+      : 'Product Photo';
+
+  const lines: string[] = [];
+  lines.push(`Hello,`);
+  if (productName) {
+    lines.push(`Sharing ${typeLabel.toLowerCase()} for *${productName}*:`);
+  } else {
+    lines.push(`Sharing *${title || typeLabel}*:`);
+  }
+  if (title && productName && title !== productName) {
+    lines.push(`📌 ${title}`);
+  }
+  lines.push(``);
+  lines.push(`🔗 ${cleanUrl}`);
+  lines.push(``);
+  lines.push(`Best Regards,`);
+  lines.push(`${ENV.COMPANY_NAME}`);
+
+  return await openWhatsAppDirect(lines.join('\n'));
 }
 
 export const DEFAULT_WHATSAPP_SHARE_OPTIONS: WhatsAppShareOptions = {
@@ -166,5 +217,200 @@ export async function openWhatsAppDirect(message: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+/**
+ * Downloads a remote image and shares the actual image file directly.
+ * Invokes the device share system where WhatsApp (and WhatsApp contacts)
+ * will attach and send the actual photo file directly.
+ */
+export async function shareImageFileDirectly(
+  imageUrl: string,
+  dialogTitle: string = 'Share Image'
+): Promise<boolean> {
+  const cleanUrl = (imageUrl || '').trim();
+  if (!cleanUrl) return false;
+
+  const absoluteUrl = getAbsoluteMediaUrl(cleanUrl);
+  if (!absoluteUrl) return false;
+
+  try {
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('Notice', 'Photo sharing is not supported on this device.');
+      return false;
+    }
+
+    let fileToShare = absoluteUrl;
+
+    if (absoluteUrl.startsWith('http://') || absoluteUrl.startsWith('https://')) {
+      let ext = 'jpg';
+      const cleanPath = absoluteUrl.split('?')[0].toLowerCase();
+      if (cleanPath.endsWith('.png')) ext = 'png';
+      else if (cleanPath.endsWith('.webp')) ext = 'webp';
+      else if (cleanPath.endsWith('.jpeg')) ext = 'jpeg';
+      else if (cleanPath.endsWith('.gif')) ext = 'gif';
+
+      const filename = `product_photo_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+      const localUri = `${FileSystem.cacheDirectory}${filename}`;
+
+      const downloadRes = await FileSystem.downloadAsync(absoluteUrl, localUri);
+      if (!downloadRes || !downloadRes.uri) {
+        console.warn('FileSystem.downloadAsync failed for:', absoluteUrl);
+        return false;
+      }
+      fileToShare = downloadRes.uri;
+    }
+
+    let mimeType = 'image/jpeg';
+    const checkPath = fileToShare.split('?')[0].toLowerCase();
+    if (checkPath.endsWith('.png')) mimeType = 'image/png';
+    else if (checkPath.endsWith('.webp')) mimeType = 'image/webp';
+    else if (checkPath.endsWith('.gif')) mimeType = 'image/gif';
+
+    await Sharing.shareAsync(fileToShare, {
+      mimeType,
+      dialogTitle,
+      UTI: mimeType === 'image/png' ? 'public.png' : 'public.jpeg',
+    });
+
+    return true;
+  } catch (err) {
+    console.warn('Failed to share image file directly:', err);
+    return false;
+  }
+}
+
+/**
+ * Returns all valid absolute photo URLs for a product and its selected variant.
+ */
+export function getAllProductImageUrls(
+  product: Product,
+  selectedVariant?: ProductVariant | null
+): string[] {
+  const currentItem = selectedVariant || product;
+  const imageUrls: string[] = [];
+
+  const mainImg = (currentItem.image_url || product.image_url || '').trim();
+  if (mainImg) {
+    imageUrls.push(getAbsoluteMediaUrl(mainImg));
+  }
+
+  const allMedia = [...(product.media_assets || []), ...(selectedVariant?.media_assets || [])];
+  allMedia.forEach((m) => {
+    const u = (m.file_url || m.file || '').trim();
+    if (u && (m.asset_type === 'IMAGE' || !m.asset_type)) {
+      const abs = getAbsoluteMediaUrl(u);
+      if (!imageUrls.includes(abs)) {
+        imageUrls.push(abs);
+      }
+    }
+  });
+
+  return imageUrls;
+}
+
+/**
+ * Shares multiple product photos one by one directly as image files.
+ */
+export async function shareAllImagesSequentially(
+  imageUrls: string[],
+  productName: string
+): Promise<void> {
+  if (!imageUrls || imageUrls.length === 0) return;
+
+  for (let i = 0; i < imageUrls.length; i++) {
+    const isLast = i === imageUrls.length - 1;
+    await shareImageFileDirectly(
+      imageUrls[i],
+      `${productName} (Photo ${i + 1} of ${imageUrls.length})`
+    );
+
+    if (!isLast) {
+      const continueNext = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'Photo Shared',
+          `Photo ${i + 1} of ${imageUrls.length} sent to share.\nReady to share Photo ${i + 2}?`,
+          [
+            { text: 'Done', style: 'cancel', onPress: () => resolve(false) },
+            { text: `Share Photo ${i + 2}`, onPress: () => resolve(true) },
+          ]
+        );
+      });
+      if (!continueNext) break;
+    }
+  }
+}
+
+/**
+ * Shares all product photos directly as image files in ONE click.
+ * Downloads all photos and triggers multi-file native share so WhatsApp
+ * receives all images at once. Never sends raw URLs or text links.
+ */
+export async function shareAllProductImagesToWhatsApp(
+  product: Product,
+  selectedVariant?: ProductVariant | null,
+  staffName?: string
+): Promise<boolean> {
+  const imageUrls = getAllProductImageUrls(product, selectedVariant);
+
+  if (imageUrls.length === 0) {
+    Alert.alert('Notice', 'No photos available for this product.');
+    return false;
+  }
+
+  if (imageUrls.length === 1) {
+    return await shareImageFileDirectly(imageUrls[0], product.name);
+  }
+
+  try {
+    // Download all product images locally in parallel
+    const downloadPromises = imageUrls.map(async (url, idx) => {
+      try {
+        const cleanPath = url.split('?')[0].toLowerCase();
+        let ext = 'jpg';
+        if (cleanPath.endsWith('.png')) ext = 'png';
+        else if (cleanPath.endsWith('.webp')) ext = 'webp';
+        else if (cleanPath.endsWith('.jpeg')) ext = 'jpeg';
+
+        const localUri = `${FileSystem.cacheDirectory}photo_${Date.now()}_${idx}.${ext}`;
+        const res = await FileSystem.downloadAsync(url, localUri);
+        return res?.uri || null;
+      } catch (e) {
+        console.warn('Failed downloading photo for multi-share:', url, e);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(downloadPromises);
+    const localUris = results.filter((uri): uri is string => Boolean(uri));
+
+    if (localUris.length === 0) {
+      Alert.alert('Notice', 'Unable to load photos for sharing. Please check network connection.');
+      return false;
+    }
+
+    // Share each photo file directly using expo-sharing (compatible with Expo Go)
+    for (let i = 0; i < localUris.length; i++) {
+      const uri = localUris[i];
+      const checkPath = uri.split('?')[0].toLowerCase();
+      let mimeType = 'image/jpeg';
+      if (checkPath.endsWith('.png')) mimeType = 'image/png';
+      else if (checkPath.endsWith('.webp')) mimeType = 'image/webp';
+
+      await Sharing.shareAsync(uri, {
+        mimeType,
+        dialogTitle: `Share Photo ${i + 1} of ${localUris.length} - ${product.name}`,
+        UTI: mimeType === 'image/png' ? 'public.png' : 'public.jpeg',
+      });
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('shareAllProductImagesToWhatsApp error:', err);
+    Alert.alert('Error', 'Failed to share product photos.');
+    return false;
+  }
+
+  return true;
 }
 

@@ -26,9 +26,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <AnimatedPressable style={[styles.card, { width }]} onPress={onPress}>
       {/* Media Header */}
       <View style={styles.mediaContainer}>
-        {product.image_url ? (
+        {product.image_url && product.image_url.trim().length > 0 ? (
           <Image
-            source={{ uri: product.image_url }}
+            source={{ uri: product.image_url.trim() }}
             style={styles.image}
             resizeMode="contain"
           />

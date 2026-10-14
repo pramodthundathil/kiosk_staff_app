@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  Share as NativeShare,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { MediaAsset } from '../../types/product';
 import { colors, radii, shadows } from '../../theme';
 import { X, Box, Video, FileText, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react-native';
@@ -7,6 +18,8 @@ import { ThreeDViewer } from './ThreeDViewer';
 import { VideoPlayerView } from './VideoPlayerView';
 import { PdfDocumentViewer } from './PdfDocumentViewer';
 import { AnimatedPressable } from '../Common/AnimatedPressable';
+import { WhatsAppIcon } from '../Common/WhatsAppIcon';
+import { shareMediaAssetToWhatsApp, shareImageFileDirectly } from '../../utils/whatsapp';
 
 interface MediaViewerModalProps {
   visible: boolean;
@@ -16,7 +29,9 @@ interface MediaViewerModalProps {
   customUrl?: string | null;
   customType?: 'IMAGE' | 'VIDEO' | 'PDF_BROCHURE' | 'TECH_SHEET' | 'THREE_D';
   title?: string;
+  productName?: string;
   onClose: () => void;
+  onShareAllWhatsApp?: () => void;
 }
 
 export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
@@ -27,36 +42,46 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   customUrl,
   customType,
   title = 'Media Preview',
+  productName,
   onClose,
+  onShareAllWhatsApp,
 }) => {
   // Combine provided single asset or custom URL into asset list if assets array is empty
   const mediaList: MediaAsset[] = React.useMemo(() => {
+    let raw: MediaAsset[] = [];
+
     if (assets && assets.length > 0) {
-      if (customUrl && !assets.some((a) => (a.file_url || a.file) === customUrl)) {
-        return [
+      if (customUrl && customUrl.trim().length > 0 && !assets.some((a) => (a.file_url || a.file) === customUrl.trim())) {
+        raw = [
           {
             id: 'custom_1',
             title: title || 'Media Asset',
             asset_type: customType || 'IMAGE',
-            file_url: customUrl,
+            file_url: customUrl.trim(),
           },
           ...assets,
         ];
+      } else {
+        raw = assets;
       }
-      return assets;
-    }
-    if (asset) return [asset];
-    if (customUrl) {
-      return [
+    } else if (asset) {
+      raw = [asset];
+    } else if (customUrl && customUrl.trim().length > 0) {
+      raw = [
         {
           id: 'custom_1',
           title: title || 'Media Asset',
           asset_type: customType || 'IMAGE',
-          file_url: customUrl,
+          file_url: customUrl.trim(),
         },
       ];
     }
-    return [];
+
+    // Filter out items that do not have any valid URL
+    return raw.filter((item) => {
+      const u = (item.file_url || item.file || item.external_url || (item as any).url || '').trim();
+      return u.length > 0;
+    });
   }, [assets, asset, customUrl, customType, title]);
 
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -65,10 +90,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     if (!visible) return;
 
     if (asset) {
+      const targetAssetUrl = (asset.file_url || asset.file || (asset as any).url || '').trim();
       const idx = mediaList.findIndex(
         (m) =>
           (m.id && m.id === asset.id) ||
-          ((m.file_url || m.file) && (m.file_url || m.file) === (asset.file_url || asset.file))
+          (targetAssetUrl && (m.file_url || m.file || (m as any).url || '').trim() === targetAssetUrl)
       );
       if (idx !== -1) {
         setActiveIndex(idx);
@@ -76,8 +102,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
       }
     }
 
-    if (customUrl) {
-      const idx = mediaList.findIndex((m) => (m.file_url || m.file) === customUrl);
+    if (customUrl && customUrl.trim().length > 0) {
+      const cleanCustom = customUrl.trim();
+      const idx = mediaList.findIndex(
+        (m) => (m.file_url || m.file || (m as any).url || '').trim() === cleanCustom
+      );
       if (idx !== -1) {
         setActiveIndex(idx);
         return;
@@ -94,11 +123,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   if (!visible || mediaList.length === 0) return null;
 
   const currentMedia = mediaList[activeIndex] || mediaList[0];
-  const url = currentMedia.file_url || currentMedia.file || currentMedia.external_url || '';
-  const type = currentMedia.asset_type || 'IMAGE';
-  const displayTitle = currentMedia.title || title;
+  const url = (currentMedia?.file_url || currentMedia?.file || currentMedia?.external_url || (currentMedia as any)?.url || '').trim();
+  const type = currentMedia?.asset_type || (currentMedia as any)?.type || 'IMAGE';
+  const displayTitle = currentMedia?.title || title;
 
   const hasMultiple = mediaList.length > 1;
+
+  const [isSharingImage, setIsSharingImage] = useState(false);
 
   const handlePrev = () => {
     setActiveIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
@@ -108,13 +139,34 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     setActiveIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
   };
 
+  const handleShareToWhatsApp = async () => {
+    if (!url || url.trim().length === 0) return;
+    setIsSharingImage(true);
+    try {
+      const isPhoto = type === 'IMAGE' || !type || (!url.toLowerCase().endsWith('.pdf') && type !== 'VIDEO' && type !== 'THREE_D');
+      if (isPhoto) {
+        // Share the actual image file directly to WhatsApp/contacts
+        const shared = await shareImageFileDirectly(url.trim(), displayTitle || 'Share Image');
+        if (!shared) {
+          Alert.alert('Notice', 'Unable to prepare photo file for sharing.');
+        }
+      } else {
+        await shareMediaAssetToWhatsApp(url.trim(), displayTitle, productName, type);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to share image.');
+    } finally {
+      setIsSharingImage(false);
+    }
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.modalCard}>
           {/* Header Bar */}
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
               <Text numberOfLines={1} style={styles.headerTitle}>
                 {displayTitle}
               </Text>
@@ -124,6 +176,39 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 </Text>
               )}
             </View>
+
+            {/* Direct WhatsApp Share button in expanded modal */}
+            {url && url.trim().length > 0 && (
+              <TouchableOpacity
+                style={styles.whatsAppShareBtn}
+                onPress={handleShareToWhatsApp}
+                disabled={isSharingImage}
+                activeOpacity={0.8}
+                accessibilityLabel="Share image directly to WhatsApp"
+              >
+                {isSharingImage ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <WhatsAppIcon size={18} color="#FFFFFF" />
+                )}
+                <Text style={styles.whatsAppShareBtnText}>
+                  {isSharingImage ? 'Sharing...' : 'Share Image'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Quick Share All Photos to WhatsApp */}
+            {hasMultiple && onShareAllWhatsApp && (
+              <TouchableOpacity
+                style={styles.whatsAppShareAllBtn}
+                onPress={onShareAllWhatsApp}
+                activeOpacity={0.8}
+                accessibilityLabel="Share all product photos to WhatsApp"
+              >
+                <WhatsAppIcon size={16} color="#FFFFFF" />
+                <Text style={styles.whatsAppShareBtnText}>Share All</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <X size={20} color="#FFFFFF" />
@@ -138,9 +223,14 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <VideoPlayerView url={url} autoPlay={true} />
             ) : type === 'PDF_BROCHURE' || type === 'TECH_SHEET' || url.toLowerCase().endsWith('.pdf') ? (
               <PdfDocumentViewer pdfUrl={url} title={displayTitle} allowExpand={false} />
-            ) : (
+            ) : url && url.trim().length > 0 ? (
               <View style={styles.imageBox}>
-                <Image source={{ uri: url }} style={styles.fullImage} resizeMode="contain" />
+                <Image source={{ uri: url.trim() }} style={styles.fullImage} resizeMode="contain" />
+              </View>
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <ImageIcon size={48} color={colors.textMuted} />
+                <Text style={styles.imagePlaceholderText}>Image preview not available</Text>
               </View>
             )}
 
@@ -164,8 +254,8 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbScroll}>
                 {mediaList.map((m, idx) => {
                   const isActive = idx === activeIndex;
-                  const itemType = m.asset_type || 'IMAGE';
-                  const thumbUrl = m.file_url || m.file || '';
+                  const itemType = m.asset_type || (m as any).type || 'IMAGE';
+                  const thumbUrl = (m.file_url || m.file || m.external_url || (m as any).url || '').trim();
 
                   return (
                     <TouchableOpacity
@@ -174,7 +264,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                       onPress={() => setActiveIndex(idx)}
                       style={[styles.thumbItem, isActive && styles.thumbItemActive]}
                     >
-                      {itemType === 'IMAGE' && thumbUrl ? (
+                      {itemType === 'IMAGE' && thumbUrl && thumbUrl.length > 0 ? (
                         <Image source={{ uri: thumbUrl }} style={styles.thumbImg} resizeMode="cover" />
                       ) : itemType === 'THREE_D' ? (
                         <Box size={20} color={isActive ? colors.amberGold : '#FFFFFF'} />
@@ -305,6 +395,43 @@ const styles = StyleSheet.create({
   thumbImg: {
     width: '100%',
     height: '100%',
+  },
+  whatsAppShareBtn: {
+    backgroundColor: colors.whatsAppGreen,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radii.md,
+    marginRight: 8,
+  },
+  whatsAppShareAllBtn: {
+    backgroundColor: 'rgba(37, 211, 102, 0.2)',
+    borderWidth: 1,
+    borderColor: colors.whatsAppGreen,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: radii.md,
+    marginRight: 8,
+  },
+  whatsAppShareBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  imagePlaceholderText: {
+    color: colors.textMuted,
+    fontSize: 14,
   },
 });
 
