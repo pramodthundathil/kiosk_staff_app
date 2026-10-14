@@ -96,6 +96,17 @@ export function generateWhatsAppMessage(
   return lines.join('\n');
 }
 
+export const DEFAULT_WHATSAPP_SHARE_OPTIONS: WhatsAppShareOptions = {
+  includeOverview: true,
+  includeFeatures: true,
+  includeSpecs: true,
+  includeApplications: true,
+  includeCertificates: true,
+  includeTesting: true,
+  includeImages: true,
+  includeProductLink: true,
+};
+
 export async function openWhatsAppWithMessage(
   fullPhoneNumber: string,
   message: string
@@ -126,3 +137,34 @@ export async function openWhatsAppWithMessage(
     }
   }
 }
+
+/**
+ * Open WhatsApp directly with prefilled message without requiring a specific phone number.
+ * WhatsApp will open its contact/chat picker ("Send to...") allowing the user
+ * to select any existing contact, recent chat, or group.
+ */
+export async function openWhatsAppDirect(message: string): Promise<boolean> {
+  const encodedText = encodeURIComponent(message);
+  const appUrl = `whatsapp://send?text=${encodedText}`;
+  const webUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+
+  try {
+    const canOpen = await Linking.canOpenURL(appUrl);
+    if (canOpen) {
+      await Linking.openURL(appUrl);
+      return true;
+    } else {
+      await Linking.openURL(webUrl);
+      return true;
+    }
+  } catch (err) {
+    try {
+      await Linking.openURL(webUrl);
+      return true;
+    } catch (webErr) {
+      console.warn('Failed to open WhatsApp direct URL:', webErr);
+      return false;
+    }
+  }
+}
+

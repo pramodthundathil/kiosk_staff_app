@@ -22,17 +22,23 @@ import {
   Share2,
   ShieldCheck,
   User,
+  ArrowRight,
 } from 'lucide-react-native';
 
 import { Button } from '../Common/Button';
 import { Input } from '../Common/Input';
+import { WhatsAppIcon } from '../Common/WhatsAppIcon';
 import {
   COUNTRY_CODES,
   validatePhoneNumber,
   maskPhoneNumber,
   sanitizePhoneNumber,
 } from '../../utils/phoneValidator';
-import { generateWhatsAppMessage, openWhatsAppWithMessage } from '../../utils/whatsapp';
+import {
+  generateWhatsAppMessage,
+  openWhatsAppWithMessage,
+  openWhatsAppDirect,
+} from '../../utils/whatsapp';
 import { saveSharedHistoryItem } from '../../utils/storage';
 import { logProductShareToBackend } from '../../api/shares';
 import { useAuth } from '../../context/AuthContext';
@@ -147,6 +153,56 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
   };
 
+  const handleDirectWhatsApp = async () => {
+    setIsSending(true);
+
+    try {
+      const staffName = user?.username || 'Staff';
+
+      // Save to local staff history
+      await saveSharedHistoryItem({
+        id: `${Date.now()}`,
+        productId: product.id,
+        productName: product.name,
+        productSku: currentItem.sku || product.sku,
+        variantId: selectedVariant?.id,
+        variantName: selectedVariant?.name,
+        customerName: customerName.trim() || undefined,
+        customerPhone: 'WhatsApp Direct',
+        maskedPhone: customerName.trim() ? customerName.trim() : 'WhatsApp Contact',
+        countryCode: '',
+        staffUsername: staffName,
+        timestamp: new Date().toISOString(),
+        sharedVia: 'whatsapp',
+        optionsShared: Object.keys(options).filter((k) => options[k as keyof WhatsAppShareOptions]),
+      });
+
+      // Post to backend API
+      logProductShareToBackend({
+        product_id: product.id,
+        variant_id: selectedVariant?.id,
+        customer_name: customerName.trim() || undefined,
+        customer_phone: 'WhatsApp Direct',
+        shared_via: 'whatsapp',
+        options: Object.keys(options).filter((k) => options[k as keyof WhatsAppShareOptions]),
+      }).catch(() => {});
+
+      // Launch WhatsApp directly without phone number (opens contact chooser)
+      const success = await openWhatsAppDirect(messagePreview);
+      setIsSending(false);
+      if (success) {
+        onClose();
+      } else {
+        Alert.alert('Notice', 'Could not open WhatsApp app directly. Opening native share menu...');
+        await NativeShare.share({ message: messagePreview });
+        onClose();
+      }
+    } catch (err: any) {
+      setIsSending(false);
+      Alert.alert('Error', 'Failed to share to WhatsApp contacts. Please try again.');
+    }
+  };
+
   const handleNativeShare = async () => {
     try {
       await NativeShare.share({
@@ -180,6 +236,30 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               {selectedVariant && (
                 <Text style={styles.bannerVariant}>Selected Variant: {selectedVariant.name}</Text>
               )}
+            </View>
+
+            {/* Direct WhatsApp Share to Existing Contact */}
+            <TouchableOpacity
+              style={styles.directShareCard}
+              onPress={handleDirectWhatsApp}
+              activeOpacity={0.8}
+            >
+              <View style={styles.directShareIconBg}>
+                <WhatsAppIcon size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.directShareTextBox}>
+                <Text style={styles.directShareTitle}>Direct WhatsApp Share</Text>
+                <Text style={styles.directShareSubtitle}>
+                  Share to your WhatsApp contacts directly (no number required)
+                </Text>
+              </View>
+              <ArrowRight size={18} color={colors.whatsAppDarkGreen} />
+            </TouchableOpacity>
+
+            <View style={styles.orDividerRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>OR ENTER CUSTOMER NUMBER</Text>
+              <View style={styles.orLine} />
             </View>
 
             {/* Customer Name (Optional) Input */}
@@ -293,16 +373,25 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
 
           {/* Footer Actions */}
           <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.directWhatsAppFooterBtn}
+              onPress={handleDirectWhatsApp}
+              activeOpacity={0.8}
+            >
+              <WhatsAppIcon size={18} color="#FFFFFF" />
+              <Text style={styles.directWhatsAppFooterBtnText}>Share to Contacts</Text>
+            </TouchableOpacity>
+
             <Button
-              title="Share via WhatsApp"
+              title="Send to Number"
               onPress={handleSendWhatsApp}
-              variant="whatsApp"
+              variant="outline"
               loading={isSending}
-              icon={<Send size={18} color="#FFFFFF" />}
+              icon={<Send size={16} color={colors.primaryNavy} />}
               style={{ flex: 1 }}
             />
             <Button
-              title="Other Share"
+              title="Other"
               onPress={handleNativeShare}
               variant="outline"
               icon={<Share2 size={16} color={colors.primaryNavy} />}
@@ -496,5 +585,72 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: '#FFFFFF',
     gap: 10,
+    alignItems: 'center',
+  },
+  directShareCard: {
+    backgroundColor: '#E8F8EE',
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: '#25D366',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    ...shadows.subtle,
+  },
+  directShareIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.whatsAppGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  directShareTextBox: {
+    flex: 1,
+  },
+  directShareTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F5132',
+  },
+  directShareSubtitle: {
+    fontSize: 12,
+    color: '#157347',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  orDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  orText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  directWhatsAppFooterBtn: {
+    backgroundColor: colors.whatsAppGreen,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    ...shadows.subtle,
+  },
+  directWhatsAppFooterBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

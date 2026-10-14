@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Share,
+  Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { AppHeader } from '../../components/Header/AppHeader';
@@ -22,6 +24,7 @@ import { VideoPlayerView } from '../../components/Media/VideoPlayerView';
 import { PdfDocumentViewer } from '../../components/Media/PdfDocumentViewer';
 import { MediaViewerModal } from '../../components/Media/MediaViewerModal';
 import { WhatsAppShareModal } from '../../components/Sharing/WhatsAppShareModal';
+import { WhatsAppIcon } from '../../components/Common/WhatsAppIcon';
 import { Button } from '../../components/Common/Button';
 import { Badge } from '../../components/Common/Badge';
 import { LoadingSkeleton } from '../../components/Common/LoadingSkeleton';
@@ -29,7 +32,14 @@ import { fetchProductDetail, fetchProducts } from '../../api/products';
 import { Product, ProductVariant, MediaAsset } from '../../types/product';
 import { useResponsiveLayout } from '../../utils/responsive';
 import { colors, radii, shadows } from '../../theme';
-import { addRecentlyViewedProduct } from '../../utils/storage';
+import { addRecentlyViewedProduct, saveSharedHistoryItem } from '../../utils/storage';
+import { logProductShareToBackend } from '../../api/shares';
+import {
+  openWhatsAppDirect,
+  generateWhatsAppMessage,
+  DEFAULT_WHATSAPP_SHARE_OPTIONS,
+} from '../../utils/whatsapp';
+import { useAuth } from '../../context/AuthContext';
 import {
   Send,
   Box,
@@ -46,6 +56,7 @@ export const ProductDetailScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
+  const { user } = useAuth();
 
   const productId: string = route.params?.productId;
   const initialProduct: Product | undefined = route.params?.product;
@@ -66,6 +77,59 @@ export const ProductDetailScreen: React.FC = () => {
   const [customMediaUrl, setCustomMediaUrl] = useState<string | null>(null);
   const [customMediaType, setCustomMediaType] = useState<any>(null);
   const [modalInitialIndex, setModalInitialIndex] = useState<number>(0);
+  const [isDirectSharing, setIsDirectSharing] = useState(false);
+
+  const handleDirectWhatsAppShare = async () => {
+    if (!product) return;
+    const currentItem = selectedVariant || product;
+    const staffName = user?.username || 'Staff';
+    const msg = generateWhatsAppMessage(
+      product,
+      selectedVariant,
+      DEFAULT_WHATSAPP_SHARE_OPTIONS,
+      staffName
+    );
+
+    setIsDirectSharing(true);
+    try {
+      // Save to local staff history
+      saveSharedHistoryItem({
+        id: `${Date.now()}`,
+        productId: product.id,
+        productName: product.name,
+        productSku: currentItem.sku || product.sku,
+        variantId: selectedVariant?.id,
+        variantName: selectedVariant?.name,
+        customerName: 'WhatsApp Contact',
+        customerPhone: 'WhatsApp Direct',
+        maskedPhone: 'WhatsApp Contacts',
+        countryCode: '',
+        staffUsername: staffName,
+        timestamp: new Date().toISOString(),
+        sharedVia: 'whatsapp',
+        optionsShared: Object.keys(DEFAULT_WHATSAPP_SHARE_OPTIONS),
+      }).catch(() => {});
+
+      logProductShareToBackend({
+        product_id: product.id,
+        variant_id: selectedVariant?.id,
+        customer_name: 'WhatsApp Contact',
+        customer_phone: 'WhatsApp Direct',
+        shared_via: 'whatsapp',
+        options: Object.keys(DEFAULT_WHATSAPP_SHARE_OPTIONS),
+      }).catch(() => {});
+
+      const success = await openWhatsAppDirect(msg);
+      setIsDirectSharing(false);
+      if (!success) {
+        Alert.alert('Notice', 'Could not open WhatsApp app directly. Opening native share menu...');
+        await Share.share({ title: product.name, message: msg });
+      }
+    } catch (err) {
+      setIsDirectSharing(false);
+      Alert.alert('Error', 'Failed to share to WhatsApp contacts.');
+    }
+  };
 
   const loadDetail = async () => {
     if (!productId) return;
@@ -246,14 +310,27 @@ export const ProductDetailScreen: React.FC = () => {
 
               {/* Share & Demo Action Bar */}
               <View style={styles.demoActionsBox}>
-                <Button
-                  title="Share with Customer via WhatsApp"
-                  onPress={() => setShareModalVisible(true)}
-                  variant="whatsApp"
-                  size="lg"
-                  icon={<Send size={20} color="#FFFFFF" />}
-                  style={{ width: '100%' }}
-                />
+                <View style={styles.shareRow}>
+                  <Button
+                    title="Share with Customer via WhatsApp"
+                    onPress={() => setShareModalVisible(true)}
+                    variant="whatsApp"
+                    size="lg"
+                    icon={<Send size={18} color="#FFFFFF" />}
+                    style={{ flex: 1 }}
+                  />
+                  <TouchableOpacity
+                    style={styles.directWhatsAppIconBtn}
+                    onPress={handleDirectWhatsAppShare}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Direct WhatsApp Share to Contact"
+                  >
+                    <WhatsAppIcon size={26} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.shareDirectHint}>
+                  Tap the WhatsApp icon to share directly to contacts
+                </Text>
               </View>
             </View>
 
@@ -325,14 +402,27 @@ export const ProductDetailScreen: React.FC = () => {
                 />
               )}
 
-              <Button
-                title="Share with Customer via WhatsApp"
-                onPress={() => setShareModalVisible(true)}
-                variant="whatsApp"
-                size="lg"
-                icon={<Send size={20} color="#FFFFFF" />}
-                style={styles.shareBtnPortrait}
-              />
+              <View style={styles.shareRowPortrait}>
+                <Button
+                  title="Share with Customer via WhatsApp"
+                  onPress={() => setShareModalVisible(true)}
+                  variant="whatsApp"
+                  size="lg"
+                  icon={<Send size={18} color="#FFFFFF" />}
+                  style={{ flex: 1 }}
+                />
+                <TouchableOpacity
+                  style={styles.directWhatsAppIconBtn}
+                  onPress={handleDirectWhatsAppShare}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Direct WhatsApp Share to Contact"
+                >
+                  <WhatsAppIcon size={26} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.shareDirectHint}>
+                Tap the WhatsApp icon to share directly to contacts
+              </Text>
             </View>
           </View>
         )}
@@ -536,6 +626,32 @@ const styles = StyleSheet.create({
   },
   shareBtnPortrait: {
     marginTop: 14,
+  },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  shareRowPortrait: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  directWhatsAppIconBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.lg,
+    backgroundColor: colors.whatsAppGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.subtle,
+  },
+  shareDirectHint: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 6,
+    textAlign: 'center',
   },
   tabsSection: {
     marginVertical: 14,
