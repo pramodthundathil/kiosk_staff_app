@@ -39,9 +39,6 @@
       "eas": {
         "projectId": "4a7a315d-2446-4671-a0f3-51e1d8eb7ca1"
       }
-    },
-    "plugins": [
-      "expo-sharing"
-    ]
+    }
   }
 }
