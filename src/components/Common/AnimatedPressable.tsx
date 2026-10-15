@@ -4,6 +4,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  ReduceMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -27,11 +28,11 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.get() }],
   }));
 
   const handlePressIn = (e: any) => {
-    scale.value = withSpring(scaleTo, { duration: 120, dampingRatio: 1 });
+    scale.set(withSpring(scaleTo, { duration: 120, dampingRatio: 1, reduceMotion: ReduceMotion.System }));
     if (enableHaptics) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
@@ -39,7 +40,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
   };
 
   const handlePressOut = (e: any) => {
-    scale.value = withSpring(1, { duration: 150, dampingRatio: 0.8 });
+    scale.set(withSpring(1, { duration: 150, dampingRatio: 0.8, reduceMotion: ReduceMotion.System }));
     rest.onPressOut?.(e);
   };
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Platform } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MainTabParamList } from '../types/navigation';
@@ -19,8 +20,14 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const HomeStackNav = createNativeStackNavigator();
 function HomeStackScreen() {
+  const reduced = useReducedMotion();
   return (
-    <HomeStackNav.Navigator screenOptions={{ headerShown: false }}>
+    <HomeStackNav.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: reduced ? 'fade' : 'slide_from_right',
+      }}
+    >
       <HomeStackNav.Screen name="HomeMain" component={HomeScreen} />
       <HomeStackNav.Screen name="CategoryDetail" component={CategoryDetailScreen} />
       <HomeStackNav.Screen name="SubCategoryProducts" component={SubCategoryProductsScreen} />
@@ -34,8 +41,14 @@ function HomeStackScreen() {
 
 const CategoriesStackNav = createNativeStackNavigator();
 function CategoriesStackScreen() {
+  const reduced = useReducedMotion();
   return (
-    <CategoriesStackNav.Navigator screenOptions={{ headerShown: false }}>
+    <CategoriesStackNav.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: reduced ? 'fade' : 'slide_from_right',
+      }}
+    >
       <CategoriesStackNav.Screen name="CategoriesMain" component={CategoriesScreen} />
       <CategoriesStackNav.Screen name="CategoryDetail" component={CategoryDetailScreen} />
       <CategoriesStackNav.Screen name="SubCategoryProducts" component={SubCategoryProductsScreen} />
@@ -49,8 +62,14 @@ function CategoriesStackScreen() {
 
 const SearchStackNav = createNativeStackNavigator();
 function SearchStackScreen() {
+  const reduced = useReducedMotion();
   return (
-    <SearchStackNav.Navigator screenOptions={{ headerShown: false }}>
+    <SearchStackNav.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: reduced ? 'fade' : 'slide_from_right',
+      }}
+    >
       <SearchStackNav.Screen name="SearchMain" component={SearchScreen} />
       <SearchStackNav.Screen name="ProductDetail" component={ProductDetailScreen} />
       <SearchStackNav.Screen name="CategoryDetail" component={CategoryDetailScreen} />
@@ -61,8 +80,14 @@ function SearchStackScreen() {
 
 const SharedStackNav = createNativeStackNavigator();
 function SharedStackScreen() {
+  const reduced = useReducedMotion();
   return (
-    <SharedStackNav.Navigator screenOptions={{ headerShown: false }}>
+    <SharedStackNav.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: reduced ? 'fade' : 'slide_from_right',
+      }}
+    >
       <SharedStackNav.Screen name="SharedMain" component={SharedHistoryScreen} />
       <SharedStackNav.Screen name="ProductDetail" component={ProductDetailScreen} />
     </SharedStackNav.Navigator>

@@ -271,9 +271,10 @@ export const ProductDetailScreen: React.FC = () => {
   if (hasVideo) availableTabs.push({ key: 'video', label: 'Video', icon: Video });
 
   const openDoc = (url: string, title: string) => {
+    if (!url || url.trim().length === 0) return;
     setCustomMediaUrl(url);
     setCustomMediaType('PDF_BROCHURE');
-    setActiveMediaAsset({ id: 'pdf', title, asset_type: 'PDF_BROCHURE', file_url: url });
+    setActiveMediaAsset({ id: 'pdf', title, asset_type: 'PDF_BROCHURE', file_url: url, file: url });
     setModalInitialIndex(0);
     setMediaModalVisible(true);
   };
@@ -319,32 +320,42 @@ export const ProductDetailScreen: React.FC = () => {
   const openFullscreenMedia = (item: any, explicitType?: 'IMAGE' | 'THREE_D' | 'VIDEO') => {
     let targetUrl = '';
     let targetType: 'IMAGE' | 'THREE_D' | 'VIDEO' = explicitType || 'IMAGE';
+    let targetAsset: MediaAsset | null = null;
 
     if (typeof item === 'string') {
       targetUrl = item.trim();
+      const found = visualMedia.find((m) => (m.file_url || m.file || (m as any).url) === item);
+      if (found) {
+        targetAsset = found;
+        targetType = (found.asset_type as any) || targetType;
+      }
     } else if (item) {
       targetUrl = (item.file_url || item.file || item.url || item.asset?.file_url || item.asset?.file || '').trim();
       targetType = item.asset_type || item.asset?.asset_type || item.type || explicitType || 'IMAGE';
+      targetAsset = item.asset || (typeof item === 'object' && item.id ? item : null);
     }
 
-    if (!targetUrl) return;
-
-    let targetAsset: MediaAsset = {
-      id: typeof item === 'object' && item?.id ? String(item.id) : `media_${Date.now()}`,
-      title: product?.name || 'Product Photo',
-      asset_type: targetType,
-      file_url: targetUrl,
-    };
+    if (!targetUrl || targetUrl.trim().length === 0) return;
 
     let idx = visualMedia.findIndex(
-      (m) => (m.file_url || m.file || '').trim() === targetUrl
+      (m) =>
+        (targetUrl && (m.file_url || m.file || (m as any).url) === targetUrl) ||
+        (targetAsset && targetAsset.id && m.id === targetAsset.id)
     );
     if (idx === -1) idx = 0;
+
+    const finalAsset: MediaAsset = {
+      id: targetAsset?.id || 'active_visual',
+      title: targetAsset?.title || product.name,
+      asset_type: targetType,
+      file_url: targetUrl,
+      file: targetUrl,
+    };
 
     setModalInitialIndex(idx);
     setCustomMediaUrl(targetUrl);
     setCustomMediaType(targetType);
-    setActiveMediaAsset(targetAsset);
+    setActiveMediaAsset(finalAsset);
     setMediaModalVisible(true);
   };
 

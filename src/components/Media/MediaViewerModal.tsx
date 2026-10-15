@@ -51,13 +51,15 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     let raw: MediaAsset[] = [];
 
     if (assets && assets.length > 0) {
-      if (customUrl && customUrl.trim().length > 0 && !assets.some((a) => (a.file_url || a.file) === customUrl.trim())) {
+      const cleanCustom = (customUrl || '').trim();
+      if (cleanCustom.length > 0 && !assets.some((a) => (a.file_url || a.file || a.external_url || (a as any).url || '').trim() === cleanCustom)) {
         raw = [
           {
             id: 'custom_1',
             title: title || 'Media Asset',
             asset_type: customType || 'IMAGE',
-            file_url: customUrl.trim(),
+            file_url: cleanCustom,
+            file: cleanCustom,
           },
           ...assets,
         ];
@@ -65,14 +67,23 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         raw = assets;
       }
     } else if (asset) {
-      raw = [asset];
+      const resolvedUrl = (asset.file_url || asset.file || asset.external_url || (asset as any).url || customUrl || '').trim();
+      raw = [
+        {
+          ...asset,
+          file_url: resolvedUrl,
+          file: resolvedUrl,
+        },
+      ];
     } else if (customUrl && customUrl.trim().length > 0) {
+      const cleanCustom = customUrl.trim();
       raw = [
         {
           id: 'custom_1',
           title: title || 'Media Asset',
           asset_type: customType || 'IMAGE',
-          file_url: customUrl.trim(),
+          file_url: cleanCustom,
+          file: cleanCustom,
         },
       ];
     }
@@ -90,11 +101,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     if (!visible) return;
 
     if (asset) {
-      const targetAssetUrl = (asset.file_url || asset.file || (asset as any).url || '').trim();
+      const targetAssetUrl = (asset.file_url || asset.file || asset.external_url || (asset as any).url || '').trim();
       const idx = mediaList.findIndex(
         (m) =>
           (m.id && m.id === asset.id) ||
-          (targetAssetUrl && (m.file_url || m.file || (m as any).url || '').trim() === targetAssetUrl)
+          (targetAssetUrl && (m.file_url || m.file || m.external_url || (m as any).url || '').trim() === targetAssetUrl)
       );
       if (idx !== -1) {
         setActiveIndex(idx);
@@ -105,7 +116,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     if (customUrl && customUrl.trim().length > 0) {
       const cleanCustom = customUrl.trim();
       const idx = mediaList.findIndex(
-        (m) => (m.file_url || m.file || (m as any).url || '').trim() === cleanCustom
+        (m) => (m.file_url || m.file || m.external_url || (m as any).url || '').trim() === cleanCustom
       );
       if (idx !== -1) {
         setActiveIndex(idx);
@@ -217,11 +228,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
           {/* Main Content Area */}
           <View style={styles.content}>
-            {type === 'THREE_D' ? (
+            {type === 'THREE_D' && url ? (
               <ThreeDViewer modelUrl={url} title={displayTitle} style={{ flex: 1, height: '100%' }} />
-            ) : type === 'VIDEO' ? (
+            ) : type === 'VIDEO' && url ? (
               <VideoPlayerView url={url} autoPlay={true} />
-            ) : type === 'PDF_BROCHURE' || type === 'TECH_SHEET' || url.toLowerCase().endsWith('.pdf') ? (
+            ) : (type === 'PDF_BROCHURE' || type === 'TECH_SHEET' || url.toLowerCase().endsWith('.pdf')) && url ? (
               <PdfDocumentViewer pdfUrl={url} title={displayTitle} allowExpand={false} />
             ) : url && url.trim().length > 0 ? (
               <View style={styles.imageBox}>
@@ -229,7 +240,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               </View>
             ) : (
               <View style={styles.imagePlaceholder}>
-                <ImageIcon size={48} color={colors.textMuted} />
+                <ImageIcon size={48} color={colors.textMuted} strokeWidth={1.5} />
                 <Text style={styles.imagePlaceholderText}>Image preview not available</Text>
               </View>
             )}

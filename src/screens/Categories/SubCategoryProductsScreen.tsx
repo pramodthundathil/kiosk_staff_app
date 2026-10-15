@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Image } from 'react-native';
+import Animated, { FadeInDown, useReducedMotion, Easing } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { ProductCard } from '../../components/Product/ProductCard';
@@ -9,14 +10,42 @@ import { fetchProducts } from '../../api/products';
 import { Product } from '../../types/product';
 import { SubCategorySimple } from '../../types/category';
 import { useResponsiveLayout } from '../../utils/responsive';
-import { colors, radii } from '../../theme';
+import { colors, radii, shadows } from '../../theme';
 import { Input } from '../../components/Common/Input';
-import { Search } from 'lucide-react-native';
+import { Search, Layers } from 'lucide-react-native';
+
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const BANNER_ENTER = FadeInDown.duration(250).easing(EASE_OUT);
+
+const ProductGridItem: React.FC<{
+  product: Product;
+  index: number;
+  width: number | `${number}%`;
+  reduced: boolean;
+  onPress: () => void;
+}> = ({ product, index, width, reduced, onPress }) => {
+  const entering = useMemo(
+    () =>
+      reduced
+        ? undefined
+        : FadeInDown.duration(250)
+            .delay(Math.min(index, 10) * 40)
+            .easing(EASE_OUT),
+    [index, reduced]
+  );
+
+  return (
+    <Animated.View entering={entering} style={{ width }}>
+      <ProductCard product={product} onPress={onPress} />
+    </Animated.View>
+  );
+};
 
 export const SubCategoryProductsScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
+  const reduced = useReducedMotion();
 
   const subCategory: SubCategorySimple = route.params?.subCategory;
   const categoryName: string = route.params?.categoryName || subCategory?.category_name || 'Category';
@@ -63,6 +92,12 @@ export const SubCategoryProductsScreen: React.FC = () => {
     }
   }, [filterQuery, products]);
 
+  const itemWidth: `${number}%` = layout.isTablet
+    ? layout.isLandscape
+      ? '24%'
+      : '32%'
+    : '48%';
+
   return (
     <View style={styles.container}>
       <AppHeader
@@ -81,12 +116,27 @@ export const SubCategoryProductsScreen: React.FC = () => {
         }
       >
         {/* Banner */}
-        <View style={styles.banner}>
-          <Text style={styles.categoryBreadcrumb}>{categoryName} →</Text>
-          <Text style={styles.subTitle}>{subCategory?.name}</Text>
-          {subCategory?.description && <Text style={styles.subDesc}>{subCategory.description}</Text>}
+        <Animated.View entering={reduced ? undefined : BANNER_ENTER} style={styles.banner}>
+          <View style={styles.bannerTopRow}>
+            <View style={styles.bannerIconBox}>
+              {subCategory?.image_url ? (
+                <Image
+                  source={{ uri: subCategory.image_url }}
+                  style={styles.bannerImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Layers size={30} color="#FFFFFF" />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.categoryBreadcrumb}>{categoryName} →</Text>
+              <Text style={styles.subTitle}>{subCategory?.name}</Text>
+            </View>
+          </View>
+          {subCategory?.description ? <Text style={styles.subDesc}>{subCategory.description}</Text> : null}
           <Text style={styles.countText}>{filteredProducts.length} Catalogue Items Available</Text>
-        </View>
+        </Animated.View>
 
         {/* Local Filter Bar */}
         <Input
@@ -105,20 +155,15 @@ export const SubCategoryProductsScreen: React.FC = () => {
           <EmptyState title="No products found" description="No products match the selected subcategory or filter." />
         ) : (
           <View style={styles.grid}>
-            {filteredProducts.map((prod) => (
-              <View
+            {filteredProducts.map((prod, idx) => (
+              <ProductGridItem
                 key={prod.id}
-                style={{
-                  width: layout.isTablet
-                    ? (layout.isLandscape ? '24%' : '32%')
-                    : (layout.isLandscape ? '48%' : '48%'),
-                }}
-              >
-                <ProductCard
-                  product={prod}
-                  onPress={() => navigation.navigate('ProductDetail', { productId: prod.id, product: prod })}
-                />
-              </View>
+                product={prod}
+                index={idx}
+                width={itemWidth}
+                reduced={reduced}
+                onPress={() => navigation.navigate('ProductDetail', { productId: prod.id, product: prod })}
+              />
             ))}
           </View>
         )}
@@ -141,9 +186,29 @@ const styles = StyleSheet.create({
   },
   banner: {
     backgroundColor: colors.primaryNavy,
-    padding: 16,
-    borderRadius: radii.lg,
-    marginBottom: 14,
+    padding: 18,
+    borderRadius: radii.xl,
+    marginBottom: 16,
+    ...shadows.card,
+  },
+  bannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  bannerIconBox: {
+    width: 58,
+    height: 58,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    padding: 4,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
   },
   categoryBreadcrumb: {
     fontSize: 11,
@@ -158,19 +223,20 @@ const styles = StyleSheet.create({
   },
   subDesc: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 8,
+    lineHeight: 18,
   },
   countText: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.accentBlue,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radii.full,
     alignSelf: 'flex-start',
-    marginTop: 10,
+    marginTop: 12,
   },
   skeletonGrid: {
     marginVertical: 10,
@@ -181,3 +247,4 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 });
+

@@ -133,7 +133,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
 
         {/* Top Right Action Buttons for Gallery */}
         <View style={styles.topRightActions}>
-          {currentItem && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
+          {currentItem && currentItem.url && currentItem.url.trim().length > 0 && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
             <AnimatedPressable
               style={styles.fullscreenBtn}
               onPress={() => onOpenFullscreen(currentItem, currentItem.type)}
