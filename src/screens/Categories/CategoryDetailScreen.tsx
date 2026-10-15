@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   RefreshControl,
-  TouchableOpacity,
 } from 'react-native';
+import Animated, { FadeInDown, useReducedMotion, Easing } from 'react-native-reanimated';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { AppHeader } from '../../components/Header/AppHeader';
 import { SubCategoryCard } from '../../components/Product/SubCategoryCard';
@@ -20,22 +19,47 @@ import { fetchProducts } from '../../api/products';
 import { fetchSubCategories } from '../../api/categories';
 import { colors, radii, shadows } from '../../theme';
 import { useResponsiveLayout } from '../../utils/responsive';
-import { Layers, Package, Sparkles, FolderTree, Filter, CheckCircle2, ChevronRight } from 'lucide-react-native';
-import { AnimatedPressable } from '../../components/Common/AnimatedPressable';
+import { Layers, Package, Sparkles, FolderTree } from 'lucide-react-native';
+
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+
+const SubCategoryRow: React.FC<{
+  sub: SubCategorySimple;
+  index: number;
+  width: number | `${number}%`;
+  reduced: boolean;
+  onPress: () => void;
+}> = ({ sub, index, width, reduced, onPress }) => {
+  const entering = useMemo(
+    () =>
+      reduced
+        ? undefined
+        : FadeInDown.duration(250)
+            .delay(Math.min(index, 8) * 40)
+            .easing(EASE_OUT),
+    [index, reduced]
+  );
+
+  return (
+    <Animated.View entering={entering} style={{ width }}>
+      <SubCategoryCard subCategory={sub} onPress={onPress} />
+    </Animated.View>
+  );
+};
 
 export const CategoryDetailScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
+  const reduced = useReducedMotion();
 
   const initialCategory: Category = route.params?.category;
 
-  const [category, setCategory] = useState<Category | null>(initialCategory || null);
+  const [category] = useState<Category | null>(initialCategory || null);
   const [subcategories, setSubcategories] = useState<SubCategorySimple[]>(
     initialCategory?.subcategories || []
   );
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
-  const [selectedSubCatId, setSelectedSubCatId] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -72,16 +96,6 @@ export const CategoryDetailScreen: React.FC = () => {
 
   const activeCategory = category || initialCategory;
   const hasSubcategories = subcategories.length > 0;
-
-  // Filter products by selected subcategory pill
-  const filteredProducts = selectedSubCatId === 'all'
-    ? categoryProducts
-    : categoryProducts.filter((p) => {
-        const subId = p.sub_category_id || p.sub_category?.id;
-        return String(subId) === String(selectedSubCatId);
-      });
-
-  const selectedSubCategoryObj = subcategories.find((s) => String(s.id) === String(selectedSubCatId));
 
   return (
     <View style={styles.container}>
@@ -142,147 +156,75 @@ export const CategoryDetailScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Subcategories Section */}
-        {hasSubcategories && (
+        {/* Subcategories Section: Tapping any subcategory opens its dedicated products screen */}
+        {hasSubcategories ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <FolderTree size={20} color={colors.accentBlue} />
-              <Text style={styles.sectionTitle}>Subcategories & Product Lines</Text>
+              <Text style={styles.sectionTitle}>Select a Subcategory</Text>
             </View>
 
             <View style={styles.subGrid}>
-              {subcategories.map((sub) => {
-                const isSelected = String(sub.id) === String(selectedSubCatId);
-                return (
-                  <View
-                    key={sub.id}
-                    style={{
-                      width: layout.isTablet ? '48%' : '100%',
-                    }}
-                  >
-                    <SubCategoryCard
-                      subCategory={sub}
-                      isSelected={isSelected}
-                      onPress={() => {
-                        // Toggle subcategory filter or navigate to subcategory screen if tapped again
-                        if (isSelected) {
-                          navigation.navigate('SubCategoryProducts', {
-                            subCategory: sub,
-                            categoryName: activeCategory.name,
-                          });
-                        } else {
-                          setSelectedSubCatId(String(sub.id));
-                        }
-                      }}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* Interactive Subcategory Filter Pills Bar */}
-        {hasSubcategories && (
-          <View style={styles.filterBarSection}>
-            <View style={styles.filterHeader}>
-              <Filter size={16} color={colors.primaryNavy} />
-              <Text style={styles.filterTitle}>Filter Catalogue by Line:</Text>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillScroll}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={[
-                  styles.filterPill,
-                  selectedSubCatId === 'all' && styles.filterPillActive,
-                ]}
-                onPress={() => setSelectedSubCatId('all')}
-              >
-                <Text
-                  style={[
-                    styles.filterPillText,
-                    selectedSubCatId === 'all' && styles.filterPillTextActive,
-                  ]}
-                >
-                  All Products ({categoryProducts.length})
-                </Text>
-              </TouchableOpacity>
-
-              {subcategories.map((sub) => {
-                const isSubSelected = String(sub.id) === String(selectedSubCatId);
-                const subProdsCount = categoryProducts.filter(
-                  (p) => String(p.sub_category_id || p.sub_category?.id) === String(sub.id)
-                ).length;
-
-                return (
-                  <TouchableOpacity
-                    key={sub.id}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.filterPill,
-                      isSubSelected && styles.filterPillActive,
-                    ]}
-                    onPress={() => setSelectedSubCatId(String(sub.id))}
-                  >
-                    <Text
-                      style={[
-                        styles.filterPillText,
-                        isSubSelected && styles.filterPillTextActive,
-                      ]}
-                    >
-                      {sub.name} ({subProdsCount || sub.products_count || 0})
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Products Grid Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Sparkles size={20} color={colors.amberGold} />
-            <Text style={styles.sectionTitle}>
-              {selectedSubCategoryObj
-                ? `${selectedSubCategoryObj.name} Products (${filteredProducts.length})`
-                : `Category Products (${filteredProducts.length})`}
-            </Text>
-          </View>
-
-          {isLoading && categoryProducts.length === 0 ? (
-            <View style={styles.skeletonGrid}>
-              <LoadingSkeleton height={260} borderRadius={radii.lg} style={{ marginBottom: 12 }} />
-              <LoadingSkeleton height={260} borderRadius={radii.lg} style={{ marginBottom: 12 }} />
-            </View>
-          ) : filteredProducts.length === 0 ? (
-            <EmptyState
-              title="No products found"
-              description="No catalogue products are available under this subcategory filter."
-            />
-          ) : (
-            <View style={styles.productGrid}>
-              {filteredProducts.map((prod) => (
-                <View
-                  key={prod.id}
-                  style={{
-                    width: layout.isTablet
-                      ? (layout.isLandscape ? '24%' : '32%')
-                      : (layout.isLandscape ? '48%' : '48%'),
-                  }}
-                >
-                  <ProductCard
-                    product={prod}
-                    onPress={() =>
-                      navigation.navigate('ProductDetail', { productId: prod.id, product: prod })
-                    }
-                  />
-                </View>
+              {subcategories.map((sub, idx) => (
+                <SubCategoryRow
+                  key={sub.id}
+                  sub={sub}
+                  index={idx}
+                  reduced={reduced}
+                  width={layout.isTablet ? '48%' : '100%'}
+                  onPress={() =>
+                    navigation.navigate('SubCategoryProducts', {
+                      subCategory: sub,
+                      categoryName: activeCategory.name,
+                    })
+                  }
+                />
               ))}
             </View>
-          )}
-        </View>
+          </View>
+        ) : (
+          /* Direct Products Grid Section (only shown if category has no subcategories) */
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Sparkles size={20} color={colors.amberGold} />
+              <Text style={styles.sectionTitle}>
+                Category Products ({categoryProducts.length})
+              </Text>
+            </View>
+
+            {isLoading && categoryProducts.length === 0 ? (
+              <View style={styles.skeletonGrid}>
+                <LoadingSkeleton height={260} borderRadius={radii.lg} style={{ marginBottom: 12 }} />
+                <LoadingSkeleton height={260} borderRadius={radii.lg} style={{ marginBottom: 12 }} />
+              </View>
+            ) : categoryProducts.length === 0 ? (
+              <EmptyState
+                title="No products found"
+                description="No catalogue products are available under this category."
+              />
+            ) : (
+              <View style={styles.productGrid}>
+                {categoryProducts.map((prod) => (
+                  <View
+                    key={prod.id}
+                    style={{
+                      width: layout.isTablet
+                        ? (layout.isLandscape ? '24%' : '32%')
+                        : (layout.isLandscape ? '48%' : '48%'),
+                    }}
+                  >
+                    <ProductCard
+                      product={prod}
+                      onPress={() =>
+                        navigation.navigate('ProductDetail', { productId: prod.id, product: prod })
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );

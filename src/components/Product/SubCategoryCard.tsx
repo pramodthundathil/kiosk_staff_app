@@ -33,7 +33,7 @@ export const SubCategoryCard: React.FC<SubCategoryCardProps> = ({
         {subCategory.image_url ? (
           <Image source={{ uri: subCategory.image_url }} style={styles.image} resizeMode="contain" />
         ) : (
-          <Layers size={24} color={isSelected ? '#FFFFFF' : colors.accentBlue} />
+          <Layers size={40} color={isSelected ? '#FFFFFF' : colors.accentBlue} />
         )}
       </View>
 
@@ -55,7 +55,7 @@ export const SubCategoryCard: React.FC<SubCategoryCardProps> = ({
 
           {prodCount > 0 && (
             <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-              <Package size={10} color={isSelected ? '#FFFFFF' : colors.primaryNavy} />
+              <Package size={13} color={isSelected ? '#FFFFFF' : colors.primaryNavy} />
               <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
                 {prodCount} Items
               </Text>
@@ -65,7 +65,7 @@ export const SubCategoryCard: React.FC<SubCategoryCardProps> = ({
       </View>
 
       <View style={[styles.arrowBox, isSelected && styles.arrowBoxSelected]}>
-        <ChevronRight size={16} color={isSelected ? '#FFFFFF' : colors.accentBlue} />
+        <ChevronRight size={22} color={isSelected ? '#FFFFFF' : colors.accentBlue} />
       </View>
     </AnimatedPressable>
   );
@@ -76,12 +76,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    padding: 12,
-    borderRadius: radii.lg,
+    padding: 18,
+    borderRadius: radii.xl,
     borderWidth: 1.5,
     borderColor: colors.border,
-    marginBottom: 10,
-    gap: 12,
+    marginBottom: 14,
+    gap: 16,
     ...shadows.card,
   },
   cardSelected: {
@@ -89,13 +89,14 @@ const styles = StyleSheet.create({
     borderColor: colors.accentBlue,
   },
   imageBox: {
-    width: 46,
-    height: 46,
-    borderRadius: radii.md,
+    width: 80,
+    height: 80,
+    borderRadius: radii.lg,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    padding: 6,
   },
   image: {
     width: '100%',
@@ -107,10 +108,10 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   name: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.primaryNavy,
     flex: 1,
@@ -121,19 +122,19 @@ const styles = StyleSheet.create({
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   codeBadge: {
     backgroundColor: 'rgba(13, 96, 174, 0.08)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radii.sm,
   },
   codeBadgeSelected: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   codeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.accentBlue,
   },
@@ -144,16 +145,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EDF2F7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radii.sm,
-    gap: 3,
+    gap: 5,
   },
   countBadgeSelected: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   countText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primaryNavy,
   },
@@ -161,8 +162,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   arrowBox: {
-    width: 30,
-    height: 30,
+    width: 40,
+    height: 40,
     borderRadius: radii.full,
     backgroundColor: 'rgba(13, 96, 174, 0.08)',
     alignItems: 'center',
@@ -172,4 +173,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
 });
+
 

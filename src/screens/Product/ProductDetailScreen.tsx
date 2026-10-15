@@ -123,13 +123,41 @@ export const ProductDetailScreen: React.FC = () => {
   const mainImage = currentItem.image_url || product.image_url || '';
   const allMedia = [...(product.media_assets || []), ...(selectedVariant?.media_assets || [])];
 
-  // Visual gallery media only (excludes document PDFs so datasheets don't hijack photo/3D gallery)
-  const visualMedia = allMedia.filter(
-    (a) =>
-      a.asset_type !== 'PDF_BROCHURE' &&
-      a.asset_type !== 'TECH_SHEET' &&
-      !(a.file_url && a.file_url.toLowerCase().endsWith('.pdf'))
-  );
+  // Visual gallery media only (includes main image + visual media_assets, excludes document PDFs)
+  const visualMedia = React.useMemo(() => {
+    const list: MediaAsset[] = [];
+    if (mainImage && mainImage.trim().length > 0) {
+      list.push({
+        id: 'main_image',
+        title: product?.name ? `${product.name} (Main Photo)` : 'Main Photo',
+        asset_type: 'IMAGE',
+        file_url: mainImage,
+        file: mainImage,
+      });
+    }
+    allMedia.forEach((a, idx) => {
+      const fileUrl = a.file_url || a.file || a.external_url || '';
+      if (!fileUrl || fileUrl.trim().length === 0) return;
+      if (
+        a.asset_type === 'PDF_BROCHURE' ||
+        a.asset_type === 'TECH_SHEET' ||
+        fileUrl.toLowerCase().endsWith('.pdf')
+      ) {
+        return;
+      }
+      if (a.asset_type === 'IMAGE' && fileUrl === mainImage) {
+        return;
+      }
+      list.push({
+        id: a.id || `media_${idx}`,
+        title: a.title || product?.name || 'Product Photo',
+        asset_type: a.asset_type || 'IMAGE',
+        file_url: fileUrl,
+        file: fileUrl,
+      });
+    });
+    return list;
+  }, [mainImage, allMedia, product?.name]);
 
   const threeDAsset = allMedia.find((a) => a.asset_type === 'THREE_D');
   const videoAsset = allMedia.find((a) => a.asset_type === 'VIDEO');
@@ -172,9 +200,10 @@ export const ProductDetailScreen: React.FC = () => {
   if (hasVideo) availableTabs.push({ key: 'video', label: 'Video', icon: Video });
 
   const openDoc = (url: string, title: string) => {
+    if (!url || url.trim().length === 0) return;
     setCustomMediaUrl(url);
     setCustomMediaType('PDF_BROCHURE');
-    setActiveMediaAsset({ id: 'pdf', title, asset_type: 'PDF_BROCHURE', file_url: url });
+    setActiveMediaAsset({ id: 'pdf', title, asset_type: 'PDF_BROCHURE', file_url: url, file: url });
     setModalInitialIndex(0);
     setMediaModalVisible(true);
   };
@@ -186,7 +215,7 @@ export const ProductDetailScreen: React.FC = () => {
 
     if (typeof item === 'string') {
       targetUrl = item;
-      const found = visualMedia.find((m) => (m.file_url || m.file) === item);
+      const found = visualMedia.find((m) => (m.file_url || m.file || (m as any).url) === item);
       if (found) {
         targetAsset = found;
         targetType = (found.asset_type as any) || targetType;
@@ -197,19 +226,27 @@ export const ProductDetailScreen: React.FC = () => {
       targetType = (targetAsset?.asset_type as any) || item.type || explicitType || 'IMAGE';
     }
 
+    if (!targetUrl || targetUrl.trim().length === 0) return;
+
     let idx = visualMedia.findIndex(
       (m) =>
-        (targetUrl && (m.file_url || m.file) === targetUrl) ||
+        (targetUrl && (m.file_url || m.file || (m as any).url) === targetUrl) ||
         (targetAsset && targetAsset.id && m.id === targetAsset.id)
     );
     if (idx === -1) idx = 0;
 
+    const finalAsset: MediaAsset = {
+      id: targetAsset?.id || 'active_visual',
+      title: targetAsset?.title || product.name,
+      asset_type: targetType,
+      file_url: targetUrl,
+      file: targetUrl,
+    };
+
     setModalInitialIndex(idx);
     setCustomMediaUrl(targetUrl);
     setCustomMediaType(targetType);
-    setActiveMediaAsset(
-      targetAsset || { id: 'active_visual', title: product.name, asset_type: targetType, file_url: targetUrl }
-    );
+    setActiveMediaAsset(finalAsset);
     setMediaModalVisible(true);
   };
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
@@ -36,6 +37,12 @@ export const AppNavigator: React.FC = () => {
     }
   };
 
+  const reduced = useReducedMotion();
+  const stackScreenOptions = {
+    headerShown: false,
+    animation: (reduced ? 'fade' : 'slide_from_right') as 'fade' | 'slide_from_right',
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -47,7 +54,7 @@ export const AppNavigator: React.FC = () => {
   return (
     <NavigationContainer ref={navigationRef}>
       {!isAuthenticated ? (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator screenOptions={stackScreenOptions}>
           <Stack.Screen name="Login" component={LoginScreen} />
         </Stack.Navigator>
       ) : layout.isTablet && layout.isLandscape ? (
@@ -59,21 +66,21 @@ export const AppNavigator: React.FC = () => {
           />
 
           <View style={styles.tabletMainArea}>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Navigator screenOptions={stackScreenOptions}>
               {activeRailTab === 'HomeTab' && (
-                <Stack.Screen name="MainTabs" component={HomeScreen} />
+                <Stack.Screen name="MainTabs" component={HomeScreen} options={{ animation: 'none' }} />
               )}
               {activeRailTab === 'CategoriesTab' && (
-                <Stack.Screen name="MainTabs" component={CategoriesScreen} />
+                <Stack.Screen name="MainTabs" component={CategoriesScreen} options={{ animation: 'none' }} />
               )}
               {activeRailTab === 'SearchTab' && (
-                <Stack.Screen name="MainTabs" component={SearchScreen} />
+                <Stack.Screen name="MainTabs" component={SearchScreen} options={{ animation: 'none' }} />
               )}
               {activeRailTab === 'SharedTab' && (
-                <Stack.Screen name="MainTabs" component={SharedHistoryScreen} />
+                <Stack.Screen name="MainTabs" component={SharedHistoryScreen} options={{ animation: 'none' }} />
               )}
               {activeRailTab === 'ProfileTab' && (
-                <Stack.Screen name="MainTabs" component={ProfileScreen} />
+                <Stack.Screen name="MainTabs" component={ProfileScreen} options={{ animation: 'none' }} />
               )}
 
               <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
@@ -87,8 +94,8 @@ export const AppNavigator: React.FC = () => {
         </View>
       ) : (
         /* Mobile & Portrait Layout with BottomTabNavigator */
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
+        <Stack.Navigator screenOptions={stackScreenOptions}>
+          <Stack.Screen name="MainTabs" component={BottomTabNavigator} options={{ animation: 'none' }} />
           <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
           <Stack.Screen name="SubCategoryProducts" component={SubCategoryProductsScreen} />
           <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />

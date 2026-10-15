@@ -32,20 +32,30 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   // Combine provided single asset or custom URL into asset list if assets array is empty
   const mediaList: MediaAsset[] = React.useMemo(() => {
     if (assets && assets.length > 0) {
-      if (customUrl && !assets.some((a) => (a.file_url || a.file) === customUrl)) {
+      if (customUrl && !assets.some((a) => (a.file_url || a.file || a.external_url || (a as any).url) === customUrl)) {
         return [
           {
             id: 'custom_1',
             title: title || 'Media Asset',
             asset_type: customType || 'IMAGE',
             file_url: customUrl,
+            file: customUrl,
           },
           ...assets,
         ];
       }
       return assets;
     }
-    if (asset) return [asset];
+    if (asset) {
+      const resolvedUrl = asset.file_url || asset.file || asset.external_url || (asset as any).url || customUrl || '';
+      return [
+        {
+          ...asset,
+          file_url: resolvedUrl,
+          file: resolvedUrl,
+        },
+      ];
+    }
     if (customUrl) {
       return [
         {
@@ -53,6 +63,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           title: title || 'Media Asset',
           asset_type: customType || 'IMAGE',
           file_url: customUrl,
+          file: customUrl,
         },
       ];
     }
@@ -65,10 +76,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     if (!visible) return;
 
     if (asset) {
+      const assetUrl = asset.file_url || asset.file || asset.external_url || (asset as any).url;
       const idx = mediaList.findIndex(
         (m) =>
           (m.id && m.id === asset.id) ||
-          ((m.file_url || m.file) && (m.file_url || m.file) === (asset.file_url || asset.file))
+          ((m.file_url || m.file || (m as any).url) &&
+            (m.file_url || m.file || (m as any).url) === assetUrl)
       );
       if (idx !== -1) {
         setActiveIndex(idx);
@@ -77,7 +90,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     }
 
     if (customUrl) {
-      const idx = mediaList.findIndex((m) => (m.file_url || m.file) === customUrl);
+      const idx = mediaList.findIndex((m) => (m.file_url || m.file || (m as any).url) === customUrl);
       if (idx !== -1) {
         setActiveIndex(idx);
         return;
@@ -94,9 +107,9 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   if (!visible || mediaList.length === 0) return null;
 
   const currentMedia = mediaList[activeIndex] || mediaList[0];
-  const url = currentMedia.file_url || currentMedia.file || currentMedia.external_url || '';
-  const type = currentMedia.asset_type || 'IMAGE';
-  const displayTitle = currentMedia.title || title;
+  const url = currentMedia?.file_url || currentMedia?.file || currentMedia?.external_url || (currentMedia as any)?.url || '';
+  const type = currentMedia?.asset_type || 'IMAGE';
+  const displayTitle = currentMedia?.title || title;
 
   const hasMultiple = mediaList.length > 1;
 
@@ -132,15 +145,20 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
           {/* Main Content Area */}
           <View style={styles.content}>
-            {type === 'THREE_D' ? (
+            {type === 'THREE_D' && url ? (
               <ThreeDViewer modelUrl={url} title={displayTitle} style={{ flex: 1, height: '100%' }} />
-            ) : type === 'VIDEO' ? (
+            ) : type === 'VIDEO' && url ? (
               <VideoPlayerView url={url} autoPlay={true} />
-            ) : type === 'PDF_BROCHURE' || type === 'TECH_SHEET' || url.toLowerCase().endsWith('.pdf') ? (
+            ) : (type === 'PDF_BROCHURE' || type === 'TECH_SHEET' || url.toLowerCase().endsWith('.pdf')) && url ? (
               <PdfDocumentViewer pdfUrl={url} title={displayTitle} allowExpand={false} />
-            ) : (
+            ) : url && url.trim().length > 0 ? (
               <View style={styles.imageBox}>
                 <Image source={{ uri: url }} style={styles.fullImage} resizeMode="contain" />
+              </View>
+            ) : (
+              <View style={styles.imageBox}>
+                <ImageIcon size={48} color={colors.textMuted} strokeWidth={1.5} />
+                <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 13 }}>No Image Available</Text>
               </View>
             )}
 
@@ -165,7 +183,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 {mediaList.map((m, idx) => {
                   const isActive = idx === activeIndex;
                   const itemType = m.asset_type || 'IMAGE';
-                  const thumbUrl = m.file_url || m.file || '';
+                  const thumbUrl = m.file_url || m.file || m.external_url || (m as any).url || '';
 
                   return (
                     <TouchableOpacity
@@ -174,7 +192,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                       onPress={() => setActiveIndex(idx)}
                       style={[styles.thumbItem, isActive && styles.thumbItemActive]}
                     >
-                      {itemType === 'IMAGE' && thumbUrl ? (
+                      {itemType === 'IMAGE' && thumbUrl && thumbUrl.trim().length > 0 ? (
                         <Image source={{ uri: thumbUrl }} style={styles.thumbImg} resizeMode="cover" />
                       ) : itemType === 'THREE_D' ? (
                         <Box size={20} color={isActive ? colors.amberGold : '#FFFFFF'} />

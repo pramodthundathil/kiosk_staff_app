@@ -98,7 +98,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           />
         ) : currentItem?.type === 'VIDEO' ? (
           <VideoPlayerView url={currentItem.url} autoPlay={false} />
-        ) : currentItem?.type === 'IMAGE' && currentItem.url ? (
+        ) : currentItem?.type === 'IMAGE' && currentItem.url && currentItem.url.trim().length > 0 ? (
           <Image
             source={{ uri: currentItem.url }}
             style={styles.mainImage}
@@ -125,7 +125,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
         )}
 
         {/* Fullscreen Expand Button on top right corner for Images/Videos */}
-        {currentItem && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
+        {currentItem && currentItem.url && currentItem.url.trim().length > 0 && currentItem.type !== 'THREE_D' && onOpenFullscreen && (
           <AnimatedPressable
             style={styles.fullscreenBtn}
             onPress={() => onOpenFullscreen(currentItem, currentItem.type)}
