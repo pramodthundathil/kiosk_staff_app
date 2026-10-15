@@ -1,7 +1,7 @@
 import { Linking, Platform, Alert } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Product, ProductVariant, FeaturePoint } from '../types/product';
+import { Product, ProductVariant, FeaturePoint, MediaAsset } from '../types/product';
 import { WhatsAppShareOptions } from '../types/share';
 import { formatSpecificationValue } from './formatters';
 import { ENV, getAbsoluteMediaUrl } from '../config/environment';
@@ -286,24 +286,64 @@ export async function shareImageFileDirectly(
  */
 export function getAllProductImageUrls(
   product: Product,
-  selectedVariant?: ProductVariant | null
+  selectedVariant?: ProductVariant | null,
+  customAssets?: MediaAsset[]
 ): string[] {
   const currentItem = selectedVariant || product;
   const imageUrls: string[] = [];
 
-  const mainImg = (currentItem.image_url || product.image_url || '').trim();
+  const mainImg = (
+    currentItem.image_url ||
+    currentItem.image ||
+    product.image_url ||
+    product.image ||
+    ''
+  ).trim();
   if (mainImg) {
-    imageUrls.push(getAbsoluteMediaUrl(mainImg));
+    const abs = getAbsoluteMediaUrl(mainImg);
+    if (abs && !imageUrls.includes(abs)) {
+      imageUrls.push(abs);
+    }
   }
 
-  const allMedia = [...(product.media_assets || []), ...(selectedVariant?.media_assets || [])];
+  const allMedia = [
+    ...(customAssets || []),
+    ...(product.media_assets || []),
+    ...(selectedVariant?.media_assets || []),
+  ];
+
   allMedia.forEach((m) => {
-    const u = (m.file_url || m.file || '').trim();
-    if (u && (m.asset_type === 'IMAGE' || !m.asset_type)) {
-      const abs = getAbsoluteMediaUrl(u);
-      if (!imageUrls.includes(abs)) {
-        imageUrls.push(abs);
-      }
+    const u = (
+      m.file_url ||
+      m.file ||
+      (m as any).url ||
+      (m as any).image ||
+      m.external_url ||
+      ''
+    ).trim();
+    if (!u) return;
+
+    const lowerUrl = u.toLowerCase();
+    const typeUpper = (m.asset_type || (m as any).type || '').toUpperCase();
+
+    // Skip non-image assets
+    if (
+      typeUpper === 'PDF_BROCHURE' ||
+      typeUpper === 'TECH_SHEET' ||
+      typeUpper === 'VIDEO' ||
+      typeUpper === 'THREE_D' ||
+      lowerUrl.endsWith('.pdf') ||
+      lowerUrl.endsWith('.mp4') ||
+      lowerUrl.endsWith('.mov') ||
+      lowerUrl.endsWith('.glb') ||
+      lowerUrl.endsWith('.gltf')
+    ) {
+      return;
+    }
+
+    const abs = getAbsoluteMediaUrl(u);
+    if (abs && !imageUrls.includes(abs)) {
+      imageUrls.push(abs);
     }
   });
 

@@ -130,7 +130,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         customer_phone: fullPhone,
         shared_via: 'whatsapp',
         options: Object.keys(options).filter((k) => options[k as keyof WhatsAppShareOptions]),
-      }).catch(() => {});
+      }).catch(() => { });
 
 
       // Launch WhatsApp
@@ -181,7 +181,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         customer_phone: 'WhatsApp Direct',
         shared_via: 'whatsapp',
         options: Object.keys(options).filter((k) => options[k as keyof WhatsAppShareOptions]),
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Launch WhatsApp directly without phone number (opens contact chooser)
       const success = await openWhatsAppDirect(messagePreview);
@@ -206,7 +206,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         message: messagePreview,
       });
       onClose();
-    } catch (e) {}
+    } catch (e) { }
   };
 
   return (
@@ -235,25 +235,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
             </View>
 
             {/* Quick Share Buttons */}
-            <View style={{ gap: 10, marginBottom: 16 }}>
-              {/* Direct WhatsApp Share: Complete Details */}
-              <TouchableOpacity
-                style={styles.directShareCard}
-                onPress={handleDirectWhatsApp}
-                activeOpacity={0.8}
-              >
-                <View style={styles.directShareIconBg}>
-                  <WhatsAppIcon size={22} color="#FFFFFF" />
-                </View>
-                <View style={styles.directShareTextBox}>
-                  <Text style={styles.directShareTitle}>Direct WhatsApp Share</Text>
-                  <Text style={styles.directShareSubtitle}>
-                    Share product details directly to WhatsApp contacts
-                  </Text>
-                </View>
-                <ArrowRight size={18} color={colors.whatsAppDarkGreen} />
-              </TouchableOpacity>
-            </View>
+
 
             <View style={styles.orDividerRow}>
               <View style={styles.orLine} />

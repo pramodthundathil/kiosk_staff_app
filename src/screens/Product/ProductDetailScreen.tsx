@@ -24,6 +24,7 @@ import { VideoPlayerView } from '../../components/Media/VideoPlayerView';
 import { PdfDocumentViewer } from '../../components/Media/PdfDocumentViewer';
 import { MediaViewerModal } from '../../components/Media/MediaViewerModal';
 import { WhatsAppShareModal } from '../../components/Sharing/WhatsAppShareModal';
+import { MultiPhotoShareModal } from '../../components/Sharing/MultiPhotoShareModal';
 import { WhatsAppIcon } from '../../components/Common/WhatsAppIcon';
 import { Button } from '../../components/Common/Button';
 import { Badge } from '../../components/Common/Badge';
@@ -40,7 +41,7 @@ import {
   DEFAULT_WHATSAPP_SHARE_OPTIONS,
   shareMediaAssetToWhatsApp,
   shareImageFileDirectly,
-  shareAllProductImagesToWhatsApp,
+  getAllProductImageUrls,
 } from '../../utils/whatsapp';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -76,6 +77,7 @@ export const ProductDetailScreen: React.FC = () => {
 
   // Modals
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [multiPhotoModalVisible, setMultiPhotoModalVisible] = useState(false);
   const [mediaModalVisible, setMediaModalVisible] = useState(false);
   const [activeMediaAsset, setActiveMediaAsset] = useState<MediaAsset | null>(null);
   const [customMediaUrl, setCustomMediaUrl] = useState<string | null>(null);
@@ -302,7 +304,16 @@ export const ProductDetailScreen: React.FC = () => {
 
   const handleShareAllImagesWhatsApp = async () => {
     if (!product) return;
-    await shareAllProductImagesToWhatsApp(product, selectedVariant, user?.username);
+    const photoUrls = getAllProductImageUrls(product, selectedVariant, visualMedia);
+    if (photoUrls.length === 0) {
+      Alert.alert('Notice', 'No photos available for this product.');
+      return;
+    }
+    if (photoUrls.length === 1) {
+      await shareImageFileDirectly(photoUrls[0], product.name);
+      return;
+    }
+    setMultiPhotoModalVisible(true);
   };
 
   const openFullscreenMedia = (item: any, explicitType?: 'IMAGE' | 'THREE_D' | 'VIDEO') => {
@@ -553,6 +564,15 @@ export const ProductDetailScreen: React.FC = () => {
         product={product}
         selectedVariant={selectedVariant}
         onClose={() => setShareModalVisible(false)}
+      />
+
+      {/* Multi-Photo WhatsApp Sharing Modal */}
+      <MultiPhotoShareModal
+        visible={multiPhotoModalVisible}
+        product={product}
+        selectedVariant={selectedVariant}
+        customAssets={visualMedia}
+        onClose={() => setMultiPhotoModalVisible(false)}
       />
 
       {/* Media Inspection Modal */}
