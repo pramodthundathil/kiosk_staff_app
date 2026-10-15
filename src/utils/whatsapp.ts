@@ -1,4 +1,4 @@
-import { Linking, Platform, Alert } from 'react-native';
+import { Linking, Platform, Alert, NativeModules } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Product, ProductVariant, FeaturePoint, MediaAsset } from '../types/product';
@@ -383,6 +383,119 @@ export async function shareAllImagesSequentially(
 }
 
 /**
+ * Shares multiple product photos directly as image files in ONE action.
+ * Downloads all photos locally first, then invokes multi-file sharing
+ * (react-native-share if available, or Expo Sharing sequentially).
+ */
+export async function shareMultipleImageFiles(
+  imageUrls: string[],
+  productName: string,
+  onProgress?: (step: 'downloading' | 'sharing', current: number, total: number) => void
+): Promise<boolean> {
+  const cleanUrls = imageUrls.map((u) => (u || '').trim()).filter(Boolean);
+  if (cleanUrls.length === 0) return false;
+
+  if (cleanUrls.length === 1) {
+    return await shareImageFileDirectly(cleanUrls[0], productName);
+  }
+
+  try {
+    const total = cleanUrls.length;
+    let completedDownloads = 0;
+
+    const downloadPromises = cleanUrls.map(async (url, idx) => {
+      try {
+        const absUrl = getAbsoluteMediaUrl(url);
+        let ext = 'jpg';
+        const cleanPath = (absUrl || url).split('?')[0].toLowerCase();
+        if (cleanPath.endsWith('.png')) ext = 'png';
+        else if (cleanPath.endsWith('.webp')) ext = 'webp';
+        else if (cleanPath.endsWith('.jpeg')) ext = 'jpeg';
+
+        const filename = `multi_photo_${Date.now()}_${idx}_${Math.floor(Math.random() * 1000)}.${ext}`;
+        const localUri = `${FileSystem.cacheDirectory}${filename}`;
+
+        const res = await FileSystem.downloadAsync(absUrl || url, localUri);
+        completedDownloads++;
+        if (onProgress) {
+          onProgress('downloading', completedDownloads, total);
+        }
+        return res?.uri || null;
+      } catch (err) {
+        console.warn('Failed downloading photo:', url, err);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(downloadPromises);
+    const localUris = results.filter((uri): uri is string => Boolean(uri));
+
+    if (localUris.length === 0) {
+      Alert.alert('Notice', 'Unable to load photos for sharing. Please check network connection.');
+      return false;
+    }
+
+    if (onProgress) {
+      onProgress('sharing', localUris.length, localUris.length);
+    }
+
+    // 1. Try native multi-file share (react-native-share) if module is linked
+    const hasRNShare = Boolean(NativeModules.RNShare || NativeModules.RNShareModule);
+    if (hasRNShare) {
+      try {
+        const Share = require('react-native-share').default;
+        try {
+          await Share.shareSingle({
+            social: Share.Social.WHATSAPP,
+            urls: localUris,
+            title: productName,
+            message: `*${productName}*`,
+          });
+          return true;
+        } catch (singleErr) {
+          await Share.open({
+            urls: localUris,
+            title: `Share ${localUris.length} photos - ${productName}`,
+            type: 'image/*',
+            failOnCancel: false,
+          });
+          return true;
+        }
+      } catch (rnErr) {
+        console.warn('Native RNShare failed, falling back to Expo Sharing:', rnErr);
+      }
+    }
+
+    // 2. Fallback for Expo Go (where RNShare native module is not linked)
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('Notice', 'Photo sharing is not supported on this device.');
+      return false;
+    }
+
+    for (let i = 0; i < localUris.length; i++) {
+      const uri = localUris[i];
+      let mimeType = 'image/jpeg';
+      const checkPath = uri.split('?')[0].toLowerCase();
+      if (checkPath.endsWith('.png')) mimeType = 'image/png';
+      else if (checkPath.endsWith('.webp')) mimeType = 'image/webp';
+
+      await Sharing.shareAsync(uri, {
+        mimeType,
+        dialogTitle: `Share Photo ${i + 1} of ${localUris.length} - ${productName}`,
+        UTI: mimeType === 'image/png' ? 'public.png' : 'public.jpeg',
+      });
+    }
+
+    return true;
+  } catch (err: any) {
+    console.warn('shareMultipleImageFiles error:', err);
+    Alert.alert('Error', 'Failed to share product photos.');
+    return false;
+  }
+}
+
+/**
  * Shares all product photos directly as image files in ONE click.
  * Downloads all photos and triggers multi-file native share so WhatsApp
  * receives all images at once. Never sends raw URLs or text links.
@@ -399,58 +512,6 @@ export async function shareAllProductImagesToWhatsApp(
     return false;
   }
 
-  if (imageUrls.length === 1) {
-    return await shareImageFileDirectly(imageUrls[0], product.name);
-  }
-
-  try {
-    // Download all product images locally in parallel
-    const downloadPromises = imageUrls.map(async (url, idx) => {
-      try {
-        const cleanPath = url.split('?')[0].toLowerCase();
-        let ext = 'jpg';
-        if (cleanPath.endsWith('.png')) ext = 'png';
-        else if (cleanPath.endsWith('.webp')) ext = 'webp';
-        else if (cleanPath.endsWith('.jpeg')) ext = 'jpeg';
-
-        const localUri = `${FileSystem.cacheDirectory}photo_${Date.now()}_${idx}.${ext}`;
-        const res = await FileSystem.downloadAsync(url, localUri);
-        return res?.uri || null;
-      } catch (e) {
-        console.warn('Failed downloading photo for multi-share:', url, e);
-        return null;
-      }
-    });
-
-    const results = await Promise.all(downloadPromises);
-    const localUris = results.filter((uri): uri is string => Boolean(uri));
-
-    if (localUris.length === 0) {
-      Alert.alert('Notice', 'Unable to load photos for sharing. Please check network connection.');
-      return false;
-    }
-
-    // Share each photo file directly using expo-sharing (compatible with Expo Go)
-    for (let i = 0; i < localUris.length; i++) {
-      const uri = localUris[i];
-      const checkPath = uri.split('?')[0].toLowerCase();
-      let mimeType = 'image/jpeg';
-      if (checkPath.endsWith('.png')) mimeType = 'image/png';
-      else if (checkPath.endsWith('.webp')) mimeType = 'image/webp';
-
-      await Sharing.shareAsync(uri, {
-        mimeType,
-        dialogTitle: `Share Photo ${i + 1} of ${localUris.length} - ${product.name}`,
-        UTI: mimeType === 'image/png' ? 'public.png' : 'public.jpeg',
-      });
-    }
-    return true;
-  } catch (err: any) {
-    console.warn('shareAllProductImagesToWhatsApp error:', err);
-    Alert.alert('Error', 'Failed to share product photos.');
-    return false;
-  }
-
-  return true;
+  return await shareMultipleImageFiles(imageUrls, product.name);
 }
 

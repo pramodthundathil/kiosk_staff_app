@@ -26,6 +26,7 @@ import { WhatsAppIcon } from '../Common/WhatsAppIcon';
 import {
   getAllProductImageUrls,
   shareImageFileDirectly,
+  shareMultipleImageFiles,
   openWhatsAppDirect,
 } from '../../utils/whatsapp';
 
@@ -48,10 +49,8 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [sharedIndices, setSharedIndices] = useState<number[]>([]);
   const [currentSharingIndex, setCurrentSharingIndex] = useState<number | null>(null);
-  const [activeStepInSelected, setActiveStepInSelected] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-
-  const awaitingReturnRef = useRef<boolean>(false);
+  const [sharingStatusText, setSharingStatusText] = useState<string>('');
 
   // Load photo URLs whenever modal opens or product changes
   useEffect(() => {
@@ -60,9 +59,8 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
       setSelectedIndices([]);
       setSharedIndices([]);
       setCurrentSharingIndex(null);
-      setActiveStepInSelected(0);
       setIsProcessing(false);
-      awaitingReturnRef.current = false;
+      setSharingStatusText('');
       return;
     }
 
@@ -72,31 +70,9 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
     setSelectedIndices(urls.map((_, i) => i));
     setSharedIndices([]);
     setCurrentSharingIndex(null);
-    setActiveStepInSelected(0);
     setIsProcessing(false);
-    awaitingReturnRef.current = false;
+    setSharingStatusText('');
   }, [visible, product, selectedVariant, customAssets]);
-
-  // Listen for AppState changes to detect when user returns from WhatsApp
-  useEffect(() => {
-    if (!visible) return;
-
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && awaitingReturnRef.current) {
-        awaitingReturnRef.current = false;
-        setIsProcessing(false);
-        setCurrentSharingIndex(null);
-
-        // Advance to next selected photo step
-        setActiveStepInSelected((prev) => prev + 1);
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => {
-      sub.remove();
-    };
-  }, [visible]);
 
   if (!visible || !product) return null;
 
@@ -112,8 +88,6 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
         return [...prev, index].sort((a, b) => a - b);
       }
     });
-    // Reset active sharing step if selection changes
-    setActiveStepInSelected(0);
   };
 
   // Select all or Deselect all
@@ -123,7 +97,6 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
     } else {
       setSelectedIndices(photoUrls.map((_, i) => i));
     }
-    setActiveStepInSelected(0);
   };
 
   // Share a specific photo index
@@ -134,7 +107,7 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
 
     setIsProcessing(true);
     setCurrentSharingIndex(index);
-    awaitingReturnRef.current = true;
+    setSharingStatusText(`Preparing photo ${index + 1}...`);
 
     try {
       const dialogTitle = `${product.name} (Photo ${index + 1} of ${totalPhotos})`;
@@ -142,30 +115,51 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
 
       if (success) {
         setSharedIndices((prev) => (prev.includes(index) ? prev : [...prev, index]));
-      } else {
-        awaitingReturnRef.current = false;
-        setIsProcessing(false);
-        setCurrentSharingIndex(null);
       }
     } catch (err) {
-      awaitingReturnRef.current = false;
+      Alert.alert('Notice', 'Unable to share photo. Please try again.');
+    } finally {
       setIsProcessing(false);
       setCurrentSharingIndex(null);
-      Alert.alert('Notice', 'Unable to share photo. Please try again.');
+      setSharingStatusText('');
     }
   };
 
-  // Handle sequentially sharing next photo among selected
-  const handleShareNextSelected = () => {
+  // Share all selected photos to WhatsApp at once
+  const handleShareAllSelected = async () => {
     if (selectedIndices.length === 0) {
       Alert.alert('Notice', 'Please select at least 1 photo to share.');
       return;
     }
 
-    const targetStep =
-      activeStepInSelected < selectedIndices.length ? activeStepInSelected : 0;
-    const photoIdxToShare = selectedIndices[targetStep];
-    handleShareIndex(photoIdxToShare);
+    const targetUrls = selectedIndices.map((i) => photoUrls[i]).filter(Boolean);
+    if (targetUrls.length === 0) return;
+
+    setIsProcessing(true);
+    setSharingStatusText(`Preparing ${targetUrls.length} photos for WhatsApp...`);
+
+    try {
+      const success = await shareMultipleImageFiles(
+        targetUrls,
+        product.name,
+        (step, current, total) => {
+          if (step === 'downloading') {
+            setSharingStatusText(`Preparing photo ${current} of ${total}...`);
+          } else {
+            setSharingStatusText(`Opening WhatsApp with ${total} photos...`);
+          }
+        }
+      );
+
+      if (success) {
+        setSharedIndices((prev) => Array.from(new Set([...prev, ...selectedIndices])));
+      }
+    } catch (err) {
+      Alert.alert('Notice', 'Unable to share photos. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      setSharingStatusText('');
+    }
   };
 
   // Share selected photo links as a single direct WhatsApp message
@@ -252,9 +246,6 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
                 const isSelected = selectedIndices.includes(index);
                 const isShared = sharedIndices.includes(index);
                 const isCurrent = currentSharingIndex === index;
-                const activeSelectedIdx = selectedIndices.indexOf(index);
-                const isNextToShare =
-                  isSelected && activeStepInSelected === activeSelectedIdx && !isShared;
 
                 return (
                   <TouchableOpacity
@@ -262,7 +253,6 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
                     style={[
                       styles.photoCard,
                       isSelected && styles.photoCardSelected,
-                      isNextToShare && styles.photoCardNext,
                       isShared && styles.photoCardShared,
                     ]}
                     onPress={() => toggleSelectIndex(index)}
@@ -335,20 +325,13 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
               })}
             </View>
 
-            {/* Sequence Status Notice */}
-            {selectedIndices.length > 1 &&
-              activeStepInSelected > 0 &&
-              !isAllSelectedShared && (
-                <View style={styles.sequenceNotice}>
-                  <Text style={styles.sequenceNoticeTitle}>
-                    ✓ Photo sent! Ready to share Photo {activeStepInSelected + 1} of{' '}
-                    {selectedIndices.length}
-                  </Text>
-                  <Text style={styles.sequenceNoticeSubtitle}>
-                    Tap below to open WhatsApp and send the next selected photo to the same customer chat.
-                  </Text>
-                </View>
-              )}
+            {/* Preparation / Progress Status Notice */}
+            {isProcessing && sharingStatusText ? (
+              <View style={styles.sequenceNotice}>
+                <ActivityIndicator size="small" color={colors.accentBlue} style={{ marginRight: 8 }} />
+                <Text style={styles.sequenceNoticeTitle}>{sharingStatusText}</Text>
+              </View>
+            ) : null}
 
             {isAllSelectedShared && selectedIndices.length > 0 && (
               <View style={styles.completedNotice}>
@@ -362,7 +345,7 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
 
           {/* Action Footer */}
           <View style={styles.footer}>
-            {/* Primary Action Button: Share Selected */}
+            {/* Primary Action Button: Share All Selected Photos */}
             {!isAllSelectedShared ? (
               <TouchableOpacity
                 style={[
@@ -370,7 +353,7 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
                   (isProcessing || selectedIndices.length === 0) &&
                     styles.primaryActionBtnDisabled,
                 ]}
-                onPress={handleShareNextSelected}
+                onPress={handleShareAllSelected}
                 disabled={isProcessing || selectedIndices.length === 0}
                 activeOpacity={0.85}
               >
@@ -380,17 +363,15 @@ export const MultiPhotoShareModal: React.FC<MultiPhotoShareModalProps> = ({
                   <WhatsAppIcon size={20} color="#FFFFFF" />
                 )}
                 <Text style={styles.primaryActionBtnText}>
-                  {selectedIndices.length === 0
+                  {isProcessing
+                    ? (sharingStatusText || 'Preparing Photos...')
+                    : selectedIndices.length === 0
                     ? 'Select Photos Above to Share'
                     : selectedIndices.length === 1
-                    ? `Share Selected Photo to WhatsApp`
-                    : activeStepInSelected === 0
-                    ? `Share ${selectedIndices.length} Selected Photos to WhatsApp`
-                    : `Share Photo ${activeStepInSelected + 1} of ${
-                        selectedIndices.length
-                      } to WhatsApp`}
+                    ? `Share 1 Selected Photo to WhatsApp`
+                    : `Share All ${selectedIndices.length} Photos to WhatsApp`}
                 </Text>
-                {selectedIndices.length > 0 && <ArrowRight size={18} color="#FFFFFF" />}
+                {!isProcessing && selectedIndices.length > 0 && <ArrowRight size={18} color="#FFFFFF" />}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.doneBtn} onPress={onClose} activeOpacity={0.8}>
