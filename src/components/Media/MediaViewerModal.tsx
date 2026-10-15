@@ -96,9 +96,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   }, [assets, asset, customUrl, customType, title]);
 
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [isSharingImage, setIsSharingImage] = useState(false);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setIsSharingImage(false);
+      return;
+    }
 
     if (asset) {
       const targetAssetUrl = (asset.file_url || asset.file || asset.external_url || (asset as any).url || '').trim();
@@ -139,8 +143,6 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const displayTitle = currentMedia?.title || title;
 
   const hasMultiple = mediaList.length > 1;
-
-  const [isSharingImage, setIsSharingImage] = useState(false);
 
   const handlePrev = () => {
     setActiveIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
