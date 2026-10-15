@@ -95,8 +95,10 @@ export function generateWhatsAppMessage(
   }
 
   // Product Link
-  if (options?.includeProductLink) {
-    const productUrl = `${ENV.COMPANY_WEBSITE}/products/${product.id}`;
+  if (options?.includeProductLink && (product.id || product.sku)) {
+    const baseUrl = ENV.API_BASE_URL.replace(/\/+$/, '');
+    const identifier = product.id || product.sku;
+    const productUrl = `${baseUrl}/products/${identifier}/`;
     lines.push(`🌐 *View Details:* ${productUrl}`);
   }
 

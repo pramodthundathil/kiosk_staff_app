@@ -5,7 +5,7 @@ export const ENV = {
   API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://excel.byteboot.in',
   API_TIMEOUT: 15000,
   APP_NAME: 'Excel Earthing Staff Catalogue',
-  COMPANY_NAME: 'Excel Earthing',
+  COMPANY_NAME: 'Excel Earthing Pvt Ltd',
   COMPANY_WEBSITE: 'https://excelearting.com',
   DEFAULT_COUNTRY_CODE: '+91',
 };

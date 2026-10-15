@@ -29,6 +29,7 @@ import {
   Info,
 } from 'lucide-react-native';
 import { changeStaffPassword } from '../../api/auth';
+import { ENV } from '../../config/environment';
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuth();
@@ -119,7 +120,7 @@ export const ProfileScreen: React.FC = () => {
             <View style={styles.infoRow}>
               <Building size={18} color={colors.accentBlue} />
               <Text style={styles.infoLabel}>Company:</Text>
-              <Text style={styles.infoVal}>Excel Earthing</Text>
+              <Text style={styles.infoVal}>{ENV.COMPANY_NAME}</Text>
             </View>
 
             <View style={styles.infoRow}>
